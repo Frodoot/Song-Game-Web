@@ -62,15 +62,57 @@ function saveSongsIndex() {
 
 loadSongsIndex();
 
-// Получение текста через lyrics.ovh API
-async function fetchLyrics(artist, title) {
+// Функция получения синхронизированных строк через API LRCLIB
+async function fetchSyncedLyricsFromLRCLIB(artist, title) {
   try {
-    const response = await axios.get(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
-    return response.data.lyrics;
+    // LRCLIB API endpoint для поиска
+    const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
+    const response = await axios.get(url);
+    
+    const data = response.data;
+    if (!data || !data.syncedLyrics) {
+      console.log(`Синхронизированный текст не найден для "${title}" от "${artist}"`);
+      return null;
+    }
+    
+    // Парсим LRC формат: [mm:ss.xx] текст строки
+    const lrcString = data.syncedLyrics;
+    const lines = parseLRC(lrcString);
+    
+    if (lines.length === 0) return null;
+    
+    // Преобразуем в формат { text: string, time: number (секунды) }
+    return lines.map(line => ({
+      text: line.text,
+      time: line.time
+    }));
   } catch (error) {
-    console.error('Ошибка получения текста:', error.message);
+    console.error(`Ошибка при запросе к LRCLIB: ${error.message}`);
     return null;
   }
+}
+
+// Парсер LRC строки
+function parseLRC(lrcContent) {
+  const lines = lrcContent.split('\n');
+  const result = [];
+  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2})\]/;
+  
+  for (const line of lines) {
+    const match = timeRegex.exec(line);
+    if (match) {
+      const minutes = parseInt(match[1], 10);
+      const seconds = parseInt(match[2], 10);
+      const centiseconds = parseInt(match[3], 10);
+      const timeInSeconds = minutes * 60 + seconds + centiseconds / 100;
+      
+      const text = line.replace(timeRegex, '').trim();
+      if (text) {
+        result.push({ time: timeInSeconds, text });
+      }
+    }
+  }
+  return result;
 }
 
 // Разбивка текста на строки
@@ -126,20 +168,11 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: 'Не удалось прочитать длительность MP3-файла' });
     }
 
-    // Получаем текст через API
-    const lyrics = await fetchLyrics(artist, title);
-    if (!lyrics) {
+    const linesWithTime = await fetchSyncedLyricsFromLRCLIB(artist, title);
+    if (!linesWithTime || linesWithTime.length === 0) {
       fs.unlinkSync(audioPath);
-      return res.status(404).json({ error: 'Текст песни не найден' });
+      return res.status(404).json({ error: 'Синхронизированный текст не найден. Попробуйте другую песню.' });
     }
-
-    const linesRaw = splitLyricsToLines(lyrics);
-    if (linesRaw.length === 0) {
-      fs.unlinkSync(audioPath);
-      return res.status(400).json({ error: 'Текст песни пуст' });
-    }
-
-    const linesWithTime = generateTimestamps(linesRaw, duration);
 
     // Сохраняем JSON файл
     const jsonFilename = req.file.filename.replace('.mp3', '.json');
@@ -168,8 +201,8 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
       title,
       artist,
       duration,
-      audioUrl: `/songs/${req.file.filename}`,
-      jsonUrl: `/songs/${jsonFilename}`
+      audioUrl: `/uploads/${req.file.filename}`,
+      jsonUrl: `/uploads/${jsonFilename}`
     });
   } catch (err) {
     console.error(err);
