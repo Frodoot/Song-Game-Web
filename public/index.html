@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Lyrics Battle - Музыкальная игра</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Главное меню -->
+        <div id="mainMenu" class="screen active">
+            <h1>🎤 Lyrics Battle</h1>
+            <div class="menu-buttons">
+                <button id="createGameBtn">➕ Создать игру</button>
+                <button id="joinGameBtn">🔗 Присоединиться</button>
+                <button id="addSongBtn">🎵 Добавить песню</button>
+            </div>
+            <div id="songList" class="song-list">
+                <h3>Доступные песни</h3>
+                <div id="songsContainer"></div>
+            </div>
+        </div>
+
+        <!-- Создание игры (выбор песни и имя) -->
+        <div id="createGameScreen" class="screen">
+            <h2>Создание игры</h2>
+            <input type="text" id="playerNameCreate" placeholder="Ваше имя" maxlength="20">
+            <select id="songSelectCreate"></select>
+            <button id="confirmCreateBtn">Создать комнату</button>
+            <button class="backBtn">Назад</button>
+        </div>
+
+        <!-- Присоединение к игре -->
+        <div id="joinGameScreen" class="screen">
+            <h2>Присоединение к игре</h2>
+            <input type="text" id="roomCode" placeholder="Код комнаты" maxlength="6">
+            <input type="text" id="playerNameJoin" placeholder="Ваше имя" maxlength="20">
+            <button id="confirmJoinBtn">Присоединиться</button>
+            <button class="backBtn">Назад</button>
+        </div>
+
+        <!-- Добавление песни -->
+        <div id="addSongScreen" class="screen">
+            <h2>Добавить новую песню</h2>
+            <input type="text" id="songTitle" placeholder="Название песни">
+            <input type="text" id="songArtist" placeholder="Исполнитель">
+            <input type="text" id="songAudioUrl" placeholder="URL аудиофайла (MP3)">
+            <input type="number" id="songDuration" placeholder="Длительность (секунды)" step="0.1">
+            <button id="submitSongBtn">Найти текст и добавить</button>
+            <div id="addSongStatus"></div>
+            <button class="backBtn">Назад</button>
+        </div>
+
+        <!-- Лобби (ожидание игроков) -->
+        <div id="lobbyScreen" class="screen">
+            <h2>Лобби: <span id="roomCodeDisplay"></span></h2>
+            <div id="playersList"></div>
+            <div id="lobbySongInfo"></div>
+            <button id="startGameBtn" style="display:none;">▶ Начать игру</button>
+            <button id="leaveLobbyBtn">Выйти</button>
+        </div>
+
+        <!-- Игровой экран -->
+        <div id="gameScreen" class="screen">
+            <div class="game-header">
+                <div class="scoreboard" id="gameScoreboard"></div>
+                <div class="current-lyric" id="currentLyricDisplay">Готовьтесь...</div>
+            </div>
+            <div class="lyrics-grid" id="lyricsButtonsContainer"></div>
+            <div class="game-controls">
+                <audio id="gameAudio" controls autoplay style="width: 100%;"></audio>
+            </div>
+            <button id="quitGameBtn">Выйти из игры</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/client.js"></script>
+</body>
+</html>
