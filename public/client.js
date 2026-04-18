@@ -46,26 +46,30 @@ async function loadSongs() {
     });
 }
 
-// Добавление песни
+// Добавление песни (с загрузкой файла)
 document.getElementById('submitSongBtn').addEventListener('click', async () => {
     const title = document.getElementById('songTitle').value.trim();
     const artist = document.getElementById('songArtist').value.trim();
-    const audioUrl = document.getElementById('songAudioUrl').value.trim();
-    const duration = parseFloat(document.getElementById('songDuration').value);
+    const fileInput = document.getElementById('songAudioFile');
+    const file = fileInput.files[0];
     
-    if (!title || !artist || !audioUrl || isNaN(duration)) {
-        document.getElementById('addSongStatus').innerHTML = '<span style="color:red;">Заполните все поля</span>';
+    if (!title || !artist || !file) {
+        document.getElementById('addSongStatus').innerHTML = '<span style="color:red;">Заполните все поля и выберите MP3 файл</span>';
         return;
     }
     
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('artist', artist);
+    formData.append('audio', file);
+    
     document.getElementById('submitSongBtn').disabled = true;
-    document.getElementById('addSongStatus').innerHTML = 'Загрузка текста...';
+    document.getElementById('addSongStatus').innerHTML = 'Загрузка MP3 и получение текста...';
     
     try {
         const res = await fetch('/api/songs', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, artist, audioUrl, duration })
+            body: formData
         });
         if (res.ok) {
             document.getElementById('addSongStatus').innerHTML = '<span style="color:lightgreen;">Песня добавлена!</span>';
@@ -73,6 +77,10 @@ document.getElementById('submitSongBtn').addEventListener('click', async () => {
                 document.getElementById('addSongStatus').innerHTML = '';
                 showScreen('main');
                 loadSongs();
+                // Очистка полей
+                document.getElementById('songTitle').value = '';
+                document.getElementById('songArtist').value = '';
+                fileInput.value = '';
             }, 1500);
         } else {
             const err = await res.json();
@@ -151,7 +159,7 @@ socket.on('gameStarting', ({ song }) => {
     currentLines = song.lines;
     gameActive = true;
     // Подготовка игрового экрана
-    const container = document.getElementById('lyricsButtonsContainer');
+    const container = document.getElementById('optionsContainer');
     container.innerHTML = '';
     // Перемешиваем кнопки для интереса
     const shuffled = [...currentLines];
@@ -198,6 +206,47 @@ socket.on('newLine', ({ lineIndex, lineText }) => {
         }
     });
 });
+
+socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
+  activeLineIndex = lineIndex;
+  currentCorrectText = correctText;
+  document.getElementById('currentLyricDisplay').innerHTML = '🎵 Какая строка сейчас звучит? 🎵';
+  // Создаём кнопки вариантов
+  const container = document.getElementById('optionsContainer');
+  container.innerHTML = '';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerText = opt;
+    btn.onclick = () => {
+      if (!gameActive) return;
+      if (activeLineIndex !== lineIndex) return; // устаревший вопрос
+      socket.emit('pressLine', { roomId: currentRoomId, selectedText: opt });
+    };
+    container.appendChild(btn);
+  });
+});
+
+socket.on('correctAnswer', ({ playerName }) => {
+  showToast(`${playerName} угадал! +10 очков`, 'success');
+});
+
+socket.on('wrongAnswer', ({ playerName, selectedText }) => {
+  showToast(`${playerName} ошибся: "${selectedText}"`, 'error');
+});
+
+socket.on('lineFinished', () => {
+  // можно подсветить, что строка закончилась
+  document.getElementById('currentLyricDisplay').innerHTML = 'Следующая строка...';
+});
+
+function showToast(msg, type) {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerText = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
 
 socket.on('linePressed', ({ playerName, lineText }) => {
     // Визуальное оповещение

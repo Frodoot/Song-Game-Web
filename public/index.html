@@ -45,9 +45,8 @@
             <h2>Добавить новую песню</h2>
             <input type="text" id="songTitle" placeholder="Название песни">
             <input type="text" id="songArtist" placeholder="Исполнитель">
-            <input type="text" id="songAudioUrl" placeholder="URL аудиофайла (MP3)">
-            <input type="number" id="songDuration" placeholder="Длительность (секунды)" step="0.1">
-            <button id="submitSongBtn">Найти текст и добавить</button>
+            <input type="file" id="songAudioFile" accept="audio/mpeg" required>
+            <button id="submitSongBtn">Загрузить MP3 и найти текст</button>
             <div id="addSongStatus"></div>
             <button class="backBtn">Назад</button>
         </div>
@@ -64,12 +63,14 @@
         <!-- Игровой экран -->
         <div id="gameScreen" class="screen">
             <div class="game-header">
-                <div class="scoreboard" id="gameScoreboard"></div>
-                <div class="current-lyric" id="currentLyricDisplay">Готовьтесь...</div>
+            <div class="scoreboard" id="gameScoreboard"></div>
+            <div class="current-lyric" id="currentLyricDisplay">Готовьтесь...</div>
             </div>
-            <div class="lyrics-grid" id="lyricsButtonsContainer"></div>
+            <div class="options-container" id="optionsContainer">
+            <!-- Здесь динамически будут появляться кнопки вариантов -->
+            </div>
             <div class="game-controls">
-                <audio id="gameAudio" controls autoplay style="width: 100%;"></audio>
+            <audio id="gameAudio" controls autoplay style="width: 100%;"></audio>
             </div>
             <button id="quitGameBtn">Выйти из игры</button>
         </div>
