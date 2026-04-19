@@ -154,85 +154,60 @@ document.getElementById('startGameBtn').onclick = () => {
     socket.emit('startGame', { roomId: currentRoomId });
 };
 
-socket.on('gameStarting', ({ song }) => {
-    currentSong = song;
-    currentLines = song.lines;
-    gameActive = true;
-    // Подготовка игрового экрана
-    const container = document.getElementById('optionsContainer');
-    container.innerHTML = '';
-    // Перемешиваем кнопки для интереса
-    const shuffled = [...currentLines];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    shuffled.forEach((line, idx) => {
-        const btn = document.createElement('button');
-        btn.className = 'lyric-btn';
-        btn.innerText = line.text;
-        btn.dataset.index = currentLines.findIndex(l => l.text === line.text); // сохраняем реальный индекс
-        btn.onclick = () => {
-            if (gameActive && activeLineIndex !== -1 && parseInt(btn.dataset.index) === activeLineIndex) {
-                socket.emit('pressLine', { roomId: currentRoomId, lineIndex: activeLineIndex, lineText: line.text });
-            } else if (gameActive) {
-                // визуальный фидбек о неправильной кнопке
-                btn.style.background = '#ff6b6b';
-                setTimeout(() => btn.style.background = '', 300);
-            }
-        };
-        container.appendChild(btn);
-    });
-    
-    // Запуск аудио
-    const audio = document.getElementById('gameAudio');
-    audio.src = currentSong.audioUrl;
-    audio.play().catch(e => console.log('Автовоспроизведение заблокировано', e));
-    
-    showScreen('game');
-    document.getElementById('currentLyricDisplay').innerText = 'Ожидание первого куплета...';
-});
+let currentQuestionIndex = -1;
+let currentOptions = [];
+let hasAnswered = false;
 
-socket.on('newLine', ({ lineIndex, lineText }) => {
-    activeLineIndex = lineIndex;
-    document.getElementById('currentLyricDisplay').innerHTML = `🎵 ${lineText} 🎵`;
-    // Подсветить активную кнопку
-    const btns = document.querySelectorAll('.lyric-btn');
-    btns.forEach(btn => {
-        if (parseInt(btn.dataset.index) === lineIndex) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
+socket.on('gameStarting', ({ song }) => {
+  currentSong = song;
+  gameActive = true;
+  currentQuestionIndex = -1;
+  hasAnswered = false;
+  showScreen('game');
+  const audio = document.getElementById('gameAudio');
+  audio.src = currentSong.audioUrl;
+  audio.play().catch(e => console.log('Автовоспроизведение заблокировано', e));
+  document.getElementById('currentLyricDisplay').innerHTML = 'Приготовьтесь...';
+  document.getElementById('optionsContainer').innerHTML = '';
 });
 
 socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
-  activeLineIndex = lineIndex;
-  currentCorrectText = correctText;
+  currentQuestionIndex = lineIndex;
+  currentOptions = options;
+  hasAnswered = false;
   document.getElementById('currentLyricDisplay').innerHTML = '🎵 Какая строка сейчас звучит? 🎵';
-  // Создаём кнопки вариантов
+  
   const container = document.getElementById('optionsContainer');
   container.innerHTML = '';
   options.forEach(opt => {
     const btn = document.createElement('button');
     btn.className = 'option-btn';
     btn.innerText = opt;
-    btn.onclick = () => {
+    btn.onclick = async (e) => {
       if (!gameActive) return;
-      if (activeLineIndex !== lineIndex) return; // устаревший вопрос
+      if (hasAnswered) {
+        showToast('Вы уже ответили на этот вопрос!', 'error');
+        return;
+      }
+      if (currentQuestionIndex !== lineIndex) return;
+      
+      // Отправляем ответ
       socket.emit('pressLine', { roomId: currentRoomId, selectedText: opt });
+      
+      // Блокируем все кнопки и добавляем анимацию затухания
+      hasAnswered = true;
+      const allBtns = document.querySelectorAll('.option-btn');
+      allBtns.forEach(button => {
+        button.disabled = true;
+        button.classList.add('fade-out');
+      });
     };
     container.appendChild(btn);
   });
 });
 
-socket.on('correctAnswer', ({ playerName }) => {
-  showToast(`${playerName} угадал! +10 очков`, 'success');
-});
-
-socket.on('wrongAnswer', ({ playerName, selectedText }) => {
-  showToast(`${playerName} ошибся: "${selectedText}"`, 'error');
+socket.on('answerResult', ({ correct, message }) => {
+  showToast(message, correct ? 'success' : 'error');
 });
 
 socket.on('lineFinished', () => {
@@ -272,6 +247,8 @@ socket.on('gameEnded', ({ winner, players }) => {
 });
 
 socket.on('gameAborted', (msg) => {
+    const audio = document.getElementById('gameAudio');
+    audio.pause();
     alert(msg);
     showScreen('main');
     gameActive = false;
@@ -283,15 +260,15 @@ socket.on('error', (msg) => {
 
 // Обновление счета в игре
 socket.on('playersUpdate', (players) => {
-    const scoreDiv = document.getElementById('gameScoreboard');
-    if (scoreDiv) {
-        scoreDiv.innerHTML = players.map(p => `<div class="score-item">${p.name}: ${p.score}</div>`).join('');
-    }
-    // Также обновляем лобби, если там
-    const lobbyPlayers = document.getElementById('playersList');
-    if (lobbyPlayers && screens.lobby.classList.contains('active')) {
-        lobbyPlayers.innerHTML = players.map(p => `<div class="player-card"><div class="player-name">${p.name}</div><div class="player-score">${p.score}</div></div>`).join('');
-    }
+  const scoreDiv = document.getElementById('gameScoreboard');
+  if (scoreDiv) {
+    scoreDiv.innerHTML = players.map(p => `<div class="score-item">${p.name}: ${p.score}</div>`).join('');
+  }
+  // Также обновляем лобби
+  const lobbyPlayers = document.getElementById('playersList');
+  if (lobbyPlayers && screens.lobby.classList.contains('active')) {
+    lobbyPlayers.innerHTML = players.map(p => `<div class="player-card"><div class="player-name">${p.name}</div><div class="player-score">${p.score}</div></div>`).join('');
+  }
 });
 
 document.getElementById('leaveLobbyBtn')?.addEventListener('click', () => {
@@ -305,6 +282,8 @@ document.getElementById('leaveLobbyBtn')?.addEventListener('click', () => {
 
 document.getElementById('quitGameBtn')?.addEventListener('click', () => {
     if (currentRoomId) {
+        const audio = document.getElementById('gameAudio');
+        audio.pause();
         socket.disconnect();
         setTimeout(() => socket.connect(), 100);
         currentRoomId = null;

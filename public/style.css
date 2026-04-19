@@ -270,12 +270,25 @@ input::placeholder {
   text-align: center;
   word-break: break-word;
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transition: opacity 0.3s ease-out, transform 0.2s ease;
 }
 
 .option-btn:hover {
   transform: translateY(-3px);
   background: #ff6b6b;
   border-color: #feca57;
+}
+
+.option-btn.fade-out {
+  opacity: 0.4;
+  transform: scale(0.98);
+  pointer-events: none;
+}
+
+.option-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .toast {

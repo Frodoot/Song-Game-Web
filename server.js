@@ -210,8 +210,6 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
   }
 });
 
-// --- Socket.IO логика (как была, но с корректной передачей комнат) ---
-// Для работы комнат используем Map, объявленный вне, чтобы он сохранялся между соединениями
 const rooms = new Map();
 
 io.on('connection', (socket) => {
@@ -238,12 +236,13 @@ io.on('connection', (socket) => {
     rooms.set(roomId, {
       players: new Map(),
       song: { ...song, lines: songData.lines, duration: songData.duration },
-      currentLineIndex: -1,
       gameActive: false,
-      gameInterval: null,
-      nextLineTimeout: null,
       hostId: socket.id,
-      roomId: roomId
+      roomId: roomId,
+      questionTimeouts: [],   // массив таймаутов для всех строк
+      currentLineTimeout: null, // таймаут закрытия текущего вопроса
+      currentLineIndex: -1,
+      answeredPlayers: new Set()
     });
     
     socket.join(roomId);
@@ -291,27 +290,31 @@ io.on('connection', (socket) => {
     startGameLoop(roomId);
   });
   
-    socket.on('pressLine', ({ roomId, selectedText }) => {
-        const room = rooms.get(roomId);
-        if (!room || !room.gameActive) return;
-        const currentIndex = room.currentLineIndex;
-        if (currentIndex === -1) return;
-        const correctText = room.song.lines[currentIndex].text;
-        const player = room.players.get(socket.id);
-        if (!player) return;
-
-        if (selectedText !== correctText) {
-            // Неправильный ответ – можно отправить уведомление, но не переходить
-            io.to(roomId).emit('wrongAnswer', { playerName: player.name, selectedText });
-            return;
-        }
-
-        // Правильный ответ
-        player.score += 10;
-        io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
-        io.to(roomId).emit('correctAnswer', { playerName: player.name });
-        nextLine(roomId);
-    });
+// Обработчик ответа игрока
+socket.on('pressLine', ({ roomId, selectedText }) => {
+  const room = rooms.get(roomId);
+  if (!room || !room.gameActive) return;
+  const currentIndex = room.currentLineIndex;
+  if (currentIndex === -1) return;
+  
+  const player = room.players.get(socket.id);
+  if (!player) return;
+  
+  if (room.answeredPlayers.has(socket.id)) {
+    socket.emit('answerResult', { correct: false, message: 'Вы уже отвечали на этот вопрос!' });
+    return;
+  }
+  
+  const correctText = room.song.lines[currentIndex].text;
+  if (selectedText === correctText) {
+    player.score += 10;
+    io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
+    socket.emit('answerResult', { correct: true, message: 'Правильно! +10 очков' });
+  } else {
+    socket.emit('answerResult', { correct: false, message: 'Неправильно!' });
+  }
+  room.answeredPlayers.add(socket.id);
+});
   
   socket.on('disconnect', () => {
     console.log('Игрок отключился:', socket.id);
@@ -351,78 +354,98 @@ io.on('connection', (socket) => {
     }));
   }
   
-  function startGameLoop(roomId) {
+function startGameLoop(roomId) {
   const room = rooms.get(roomId);
-  if (!room) return;
+  if (!room || !room.gameActive) return;
   
   const lines = room.song.lines;
-  let lineIndex = 0;
+  if (!lines.length) {
+    endGame(roomId);
+    return;
+  }
   
-    function scheduleNextLine() {
-        if (!room.gameActive) return;
-        if (lineIndex >= lines.length) {
-        endGame(roomId);
-        return;
-        }
-        
-        room.currentLineIndex = lineIndex;
-        const correctLine = lines[lineIndex];
-        // Генерируем варианты
-        const distractors = getDistractors(correctLine.text, lines, 3);
-        let options = [correctLine.text, ...distractors];
-        // Перемешиваем варианты
-        for (let i = options.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [options[i], options[j]] = [options[j], options[i]];
-        }
-        
-        io.to(roomId).emit('newQuestion', {
-        lineIndex: lineIndex,
+  const startTime = Date.now();
+  room.questionTimeouts = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const delayMs = line.time * 1000; // время строки от начала песни
+    const elapsed = Date.now() - startTime;
+    let delay = delayMs - elapsed;
+    if (delay < 0) delay = 0;
+    
+    const timeoutId = setTimeout(() => {
+      if (!room.gameActive) return;
+      
+      // Отправляем вопрос для строки i
+      room.currentLineIndex = i;
+      room.answeredPlayers.clear();
+      const correctLine = lines[i];
+      
+      // Генерация вариантов
+      const distractors = getDistractors(correctLine.text, lines, 3);
+      let options = [correctLine.text, ...distractors];
+      for (let j = options.length - 1; j > 0; j--) {
+        const k = Math.floor(Math.random() * (j + 1));
+        [options[j], options[k]] = [options[k], options[j]];
+      }
+      
+      io.to(roomId).emit('newQuestion', {
+        lineIndex: i,
         correctText: correctLine.text,
         options: options,
         time: correctLine.time
-        });
-        
-        const nextTime = (lineIndex < lines.length - 1) ? lines[lineIndex+1].time : room.song.duration;
-        const lineDuration = nextTime - correctLine.time;
-        room.nextLineTimeout = setTimeout(() => {
-        if (room.gameActive && room.currentLineIndex === lineIndex) {
-            // Время вышло – никто не ответил, переходим к следующей строке
-            nextLine(roomId);
+      });
+      
+      // Длительность текущей строки (до следующей или конца песни)
+      const nextTime = (i < lines.length - 1) ? lines[i+1].time : room.song.duration;
+      const lineDurationSec = nextTime - line.time;
+      
+      // Таймаут на закрытие вопроса (автоматический переход)
+      if (room.currentLineTimeout) clearTimeout(room.currentLineTimeout);
+      room.currentLineTimeout = setTimeout(() => {
+        if (room.gameActive && room.currentLineIndex === i) {
+          // Закрываем вопрос, сбрасываем индекс
+          room.currentLineIndex = -1;
+          room.answeredPlayers.clear();
+          // Следующий вопрос уже запланирован своим таймаутом
         }
-        }, lineDuration * 1000);
-        
-        lineIndex++;
-    }
-
-    room.gameInterval = setInterval(() => {
-        if (room.gameActive && room.currentLineIndex === -1) {
-        scheduleNextLine();
-        }
-    }, 100);
-
-    setTimeout(() => {
-        if (room.gameActive && room.currentLineIndex === -1) {
-        scheduleNextLine();
-        }
-    }, 500);
-}
-  
-  function nextLine(roomId) {
-    const room = rooms.get(roomId);
-    if (!room || !room.gameActive) return;
-    if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
-    room.currentLineIndex = -1;
-    // Клиенту можно отправить сигнал, что строка завершена (опционально)
-    io.to(roomId).emit('lineFinished');
+      }, lineDurationSec * 1000);
+      
+    }, delay);
+    
+    room.questionTimeouts.push(timeoutId);
   }
   
-  function endGame(roomId) {
+  // Таймаут на завершение игры после последней строки
+  const lastLine = lines[lines.length - 1];
+  const lastLineEndSec = room.song.duration;
+  const gameEndDelay = (lastLineEndSec * 1000) - (Date.now() - startTime);
+  if (gameEndDelay > 0) {
+    const endTimeout = setTimeout(() => {
+      endGame(roomId);
+    }, gameEndDelay);
+    room.questionTimeouts.push(endTimeout);
+  }
+}
+
+function nextLine(roomId) {
+  const room = rooms.get(roomId);
+  if (!room || !room.gameActive) return;
+  if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
+  room.currentLineIndex = -1;
+}
+  
+function endGame(roomId) {
     const room = rooms.get(roomId);
     if (!room) return;
     room.gameActive = false;
     if (room.gameInterval) clearInterval(room.gameInterval);
     if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
+    if (room.questionTimeouts) {
+      room.questionTimeouts.forEach(clearTimeout);
+      room.questionTimeouts = [];
+    }
     
     let winner = null;
     let maxScore = -1;
@@ -439,14 +462,11 @@ io.on('connection', (socket) => {
 
 // Генерация отвлекающих вариантов (distractors)
 function getDistractors(currentLineText, allLines, count = 3) {
-  // allLines - массив объектов {text, time}
   const otherLines = allLines.filter(line => line.text !== currentLineText).map(line => line.text);
-  const uniqueOthers = [...new Set(otherLines)]; // убираем дубликаты текста
+  const uniqueOthers = [...new Set(otherLines)];
   if (uniqueOthers.length < count) {
-    // Если недостаточно уникальных строк, повторяем
     while (uniqueOthers.length < count) uniqueOthers.push(...uniqueOthers);
   }
-  // Перемешиваем и берём первые count
   for (let i = uniqueOthers.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [uniqueOthers[i], uniqueOthers[j]] = [uniqueOthers[j], uniqueOthers[i]];
