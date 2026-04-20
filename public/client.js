@@ -32,12 +32,16 @@ async function loadSongs() {
     songs.forEach(song => {
         const card = document.createElement('div');
         card.className = 'song-card';
-        card.innerHTML = `<strong>${song.title}</strong><br>${song.artist}`;
-        container.appendChild(card);
-
-        card.innerHTML = `<strong>${song.title}</strong><br>${song.artist}<br>
-        <button class="edit-song-btn" data-id="${song.id}">✏️</button>`;
+        if (song.canEdit) {
+        card.innerHTML = `<strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
+            <button class="edit-song-btn" data-id="${song.id}">✏️ Редактировать</button>`;
         card.querySelector('.edit-song-btn').onclick = () => openEditor(song.id);
+        } else {
+        card.innerHTML = `<strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
+            <button class="copy-song-btn" data-id="${song.id}">📋 Копировать и редактировать</button>`;
+        card.querySelector('.copy-song-btn').onclick = () => copySong(song.id);
+        }
+        container.appendChild(card);
     });
     
     // Обновляем селекты
@@ -49,6 +53,24 @@ async function loadSongs() {
         option.textContent = `${song.artist} - ${song.title}`;
         selectCreate.appendChild(option);
     });
+}
+
+async function copySong(songId) {
+  try {
+    const res = await fetch(`/api/songs/${songId}/copy`, { method: 'POST' });
+    if (res.ok) {
+      const { id: newId } = await res.json();
+      alert('Песня скопирована! Теперь она ваша и доступна для редактирования.');
+      await loadSongs();
+      // Можно сразу открыть редактор новой песни
+      openEditor(newId);
+    } else {
+      const err = await res.json();
+      alert('Ошибка копирования: ' + err.error);
+    }
+  } catch(err) {
+    alert('Ошибка сети');
+  }
 }
 
 // Добавление песни (с загрузкой файла)
@@ -125,13 +147,18 @@ async function openEditor(songId) {
   try {
     const res = await fetch(`/api/songs/${songId}`);
     const song = await res.json();
-    document.getElementById('editSongTitle').innerText = `${escapeHtml(song.artist)} - ${escapeHtml(song.title)}`;
-    currentEditLines = song.lines.map(l => ({ text: l.text, time: l.time }));
-    currentEditDifficulty = song.difficultyChanges || [];
-    renderLinesEditor();
-    renderDifficultyEditor();
+
+    // Заполняем поля ввода
     document.getElementById('editSongName').value = song.title;
     document.getElementById('editSongArtist').value = song.artist;
+    document.getElementById('editSongTitle').innerText = `${song.artist} - ${song.title}`;
+    
+    currentEditLines = song.lines.map(l => ({ text: l.text, time: l.time }));
+    currentEditDifficulty = song.difficultyChanges || [];
+
+    renderLinesEditor();
+    renderDifficultyEditor();
+
     showScreen('editSong');
   } catch (err) {
     console.error(err);
@@ -208,7 +235,15 @@ document.getElementById('addDifficultyRuleBtn').onclick = () => {
 
 // Сохранение изменений
 document.getElementById('saveSongBtn').onclick = async () => {
-  // Собираем строки из полей ввода (актуальные значения)
+  // Получаем новые название и исполнителя
+  const newTitle = document.getElementById('editSongName').value.trim();
+  const newArtist = document.getElementById('editSongArtist').value.trim();
+  if (!newTitle || !newArtist) {
+    alert('Название и исполнитель не могут быть пустыми');
+    return;
+  }
+  
+  // Собираем строки из DOM (как было)
   const lineTexts = document.querySelectorAll('#linesEditor .line-text');
   const lineTimes = document.querySelectorAll('#linesEditor .line-time');
   const updatedLines = [];
@@ -222,7 +257,6 @@ document.getElementById('saveSongBtn').onclick = async () => {
       return;
     }
   }
-  // Сортируем строки по времени
   updatedLines.sort((a,b) => a.time - b.time);
   
   // Собираем правила сложности
@@ -235,26 +269,20 @@ document.getElementById('saveSongBtn').onclick = async () => {
     if (!isNaN(after) && !isNaN(diff) && diff >= 2) {
       updatedDifficulty.push({ afterDuration: after, difficulty: diff });
     } else {
-      alert(`Правило ${i+1} имеет некорректные данные (afterDuration число, difficulty целое ≥2)`);
+      alert(`Правило ${i+1} имеет некорректные данные`);
       return;
     }
   }
-  // Сортируем правила по времени
   updatedDifficulty.sort((a,b) => a.afterDuration - b.afterDuration);
   
-  // Получаем текущие название и исполнитель из заголовка (можно добавить поля редактирования)
-  // Для простоты добавим скрытые поля или модалку – но пока просто используем старые значения.
-  // Предположим, что название и исполнитель нельзя изменить в этом редакторе.
-  // Чтобы их изменить – нужно добавить соответствующие поля в editSongScreen.
-  // Но по заданию достаточно строк и сложности. Оставим как есть.
-  
+  // Отправляем обновления
   try {
     const res = await fetch(`/api/songs/${currentEditSongId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: document.getElementById('editSongTitle').innerText.split(' - ')[1] || '',
-        artist: document.getElementById('editSongTitle').innerText.split(' - ')[0] || '',
+        title: newTitle,
+        artist: newArtist,
         lines: updatedLines,
         difficultyChanges: updatedDifficulty
       })

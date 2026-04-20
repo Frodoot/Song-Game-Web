@@ -8,6 +8,9 @@ const fs = require('fs');
 const path = require('path');
 const getMP3Duration = require('mp3-duration');
 
+const cookieParser = require('cookie-parser');
+const { v4: uuidv4 } = require('uuid');
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -21,6 +24,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/songs', express.static('songs'));
+
+app.use(cookieParser());
 
 // Создаём папку для загрузок
 const uploadDir = './songs';
@@ -183,14 +188,25 @@ function generateTimestamps(lines, durationSeconds) {
 
 // API: получить все песни
 app.get('/api/songs', (req, res) => {
-  res.json(songs.map(s => ({
-    id: s.id,
-    title: s.title,
-    artist: s.artist,
-    duration: s.duration,
-    audioUrl: `/songs/${s.audioFile}`,
-    jsonUrl: `/songs/${s.jsonFile}`
-  })));
+  const currentToken = req.cookies.songOwnerToken || null;
+  const songsList = songs.map(s => {
+    const jsonPath = path.join(uploadDir, s.jsonFile);
+    let ownerToken = null;
+    try {
+      const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      ownerToken = data.ownerToken;
+    } catch(e) {}
+    return {
+      id: s.id,
+      title: s.title,
+      artist: s.artist,
+      duration: s.duration,
+      audioUrl: `/uploads/${s.audioFile}`,
+      jsonUrl: `/uploads/${s.jsonFile}`,
+      canEdit: currentToken && ownerToken && currentToken === ownerToken
+    };
+  });
+  res.json(songsList);
 });
 
 // API: добавить новую песню (загрузка MP3)
@@ -239,6 +255,10 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
       return res.status(404).json({ error: 'Синхронизированный текст не найден. Попробуйте другую песню.' });
     }
 
+    const ownerToken = req.cookies.songOwnerToken || uuidv4();
+    // Устанавливаем cookie на 365 дней
+    res.cookie('songOwnerToken', ownerToken, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true });
+
     // Сохраняем JSON файл
     const jsonFilename = req.file.filename.replace('.mp3', '.json');
     const jsonPath = path.join(uploadDir, jsonFilename);
@@ -247,7 +267,8 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
       artist,
       duration,
       lines: linesWithTime,
-      difficultyChanges: parsedDifficultyChanges
+      difficultyChanges: parsedDifficultyChanges || [],
+      ownerToken: ownerToken
     }, null, 2));
 
     const newSong = {
@@ -293,25 +314,96 @@ app.get('/api/songs/:id', (req, res) => {
 app.put('/api/songs/:id', (req, res) => {
   const song = songs.find(s => s.id == req.params.id);
   if (!song) return res.status(404).json({ error: 'Песня не найдена' });
+  
+  // Проверка прав
+  const jsonPath = path.join(uploadDir, song.jsonFile);
+  let songData;
+  try {
+    songData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+  } catch(e) {
+    return res.status(500).json({ error: 'Ошибка чтения' });
+  }
+  const currentToken = req.cookies.songOwnerToken;
+  if (!currentToken || songData.ownerToken !== currentToken) {
+    return res.status(403).json({ error: 'Нет прав на редактирование этой песни' });
+  }
+
   const { title, artist, lines, difficultyChanges } = req.body;
+
   if (!title || !artist || !Array.isArray(lines)) {
     return res.status(400).json({ error: 'Неверные данные' });
   }
+
   // Обновляем метаданные в индексе
   song.title = title;
   song.artist = artist;
+
   // Обновляем JSON-файл
-  const jsonPath = path.join(uploadDir, song.jsonFile);
   const newData = {
     title,
     artist,
     duration: song.duration,
     lines: lines.map(l => ({ text: l.text, time: parseFloat(l.time) })),
-    difficultyChanges: difficultyChanges || []
+    difficultyChanges: difficultyChanges || [],
+    ownerToken: currentToken
   };
+
   fs.writeFileSync(jsonPath, JSON.stringify(newData, null, 2));
-  saveSongsIndex(); // сохраняем индекс с обновлённым названием/исполнителем
+  saveSongsIndex();
   res.json({ success: true });
+});
+
+app.post('/api/songs/:id/copy', (req, res) => {
+  const originalId = parseInt(req.params.id);
+  const originalSong = songs.find(s => s.id === originalId);
+  if (!originalSong) return res.status(404).json({ error: 'Оригинал не найден' });
+  
+  // Читаем данные оригинала
+  const jsonPath = path.join(uploadDir, originalSong.jsonFile);
+  let originalData;
+  try {
+    originalData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+  } catch(e) {
+    return res.status(500).json({ error: 'Ошибка чтения оригинала' });
+  }
+  
+  // Генерируем новые файлы
+  const newAudioFile = originalSong.audioFile; // Не копируем аудио, используем тот же (экономия места)
+  const newJsonFilename = `${Date.now()}-${Math.random().toString(36).substr(2, 6)}.json`;
+  const newJsonPath = path.join(uploadDir, newJsonFilename);
+  
+  // Новый токен владельца из cookie (или генерируем)
+  const newOwnerToken = req.cookies.songOwnerToken || uuidv4();
+  res.cookie('songOwnerToken', newOwnerToken, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true });
+  
+  // Новое название с пометкой (копия)
+  const newTitle = `${originalData.title} (копия)`;
+  
+  const newSongData = {
+    title: newTitle,
+    artist: originalData.artist,
+    duration: originalData.duration,
+    lines: originalData.lines,
+    difficultyChanges: originalData.difficultyChanges || [],
+    ownerToken: newOwnerToken,
+    copiedFrom: originalId
+  };
+  
+  fs.writeFileSync(newJsonPath, JSON.stringify(newSongData, null, 2));
+  
+  const newSong = {
+    id: nextSongId++,
+    title: newTitle,
+    artist: originalData.artist,
+    duration: originalData.duration,
+    audioFile: originalSong.audioFile,
+    jsonFile: newJsonFilename
+  };
+  
+  songs.push(newSong);
+  saveSongsIndex();
+  
+  res.status(201).json({ id: newSong.id });
 });
 
 const rooms = new Map();
