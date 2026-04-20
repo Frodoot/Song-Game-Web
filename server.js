@@ -115,6 +115,55 @@ function parseLRC(lrcContent) {
   return result;
 }
 
+// Получить количество вариантов в зависимости от времени
+function getDifficultyAtTime(difficultyChanges, currentTime) {
+  let currentDifficulty = 4; // по умолчанию 4 варианта
+  if (!difficultyChanges) return currentDifficulty;
+  // Сортируем по возрастанию afterDuration (на всякий случай)
+  const sorted = [...difficultyChanges].sort((a,b) => a.afterDuration - b.afterDuration);
+  for (const change of sorted) {
+    if (currentTime >= change.afterDuration) {
+      currentDifficulty = change.difficulty;
+    } else {
+      break;
+    }
+  }
+  return currentDifficulty;
+}
+
+// Генерация вариантов с нужным количеством отвлекающих
+function getOptionsForLine(correctText, allLines, difficulty) {
+  const distractorsCount = difficulty - 1;
+  if (distractorsCount <= 0) return [correctText];
+  
+  const otherLines = allLines.filter(line => line.text !== correctText).map(line => line.text);
+  const uniqueOthers = [...new Set(otherLines)];
+  let distractors = [];
+  
+  if (uniqueOthers.length >= distractorsCount) {
+    // Перемешиваем и берём первые distractorsCount
+    for (let i = uniqueOthers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueOthers[i], uniqueOthers[j]] = [uniqueOthers[j], uniqueOthers[i]];
+    }
+    distractors = uniqueOthers.slice(0, distractorsCount);
+  } else {
+    // Если уникальных строк недостаточно, повторяем
+    while (distractors.length < distractorsCount) {
+      distractors.push(...uniqueOthers);
+    }
+    distractors = distractors.slice(0, distractorsCount);
+  }
+  
+  let options = [correctText, ...distractors];
+  // Перемешиваем финальный массив
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return options;
+}
+
 // Разбивка текста на строки
 function splitLyricsToLines(lyrics) {
   return lyrics.split('\n')
@@ -147,9 +196,25 @@ app.get('/api/songs', (req, res) => {
 // API: добавить новую песню (загрузка MP3)
 app.post('/api/songs', upload.single('audio'), async (req, res) => {
   try {
-    const { title, artist } = req.body;
+    const { title, artist, difficultyChanges } = req.body;
     if (!title || !artist || !req.file) {
       return res.status(400).json({ error: 'Не заполнены название, исполнитель или не загружен MP3' });
+    }
+
+    let parsedDifficultyChanges = [];
+    if (difficultyChanges && difficultyChanges.trim()) {
+      try {
+        parsedDifficultyChanges = JSON.parse(difficultyChanges);
+        // Простая валидация
+        if (!Array.isArray(parsedDifficultyChanges)) throw new Error();
+        for (const item of parsedDifficultyChanges) {
+          if (typeof item.afterDuration !== 'number' || typeof item.difficulty !== 'number' || item.difficulty < 2) {
+            throw new Error();
+          }
+        }
+      } catch(e) {
+        return res.status(400).json({ error: 'Неверный формат difficultyChanges' });
+      }
     }
 
     const audioPath = path.join(uploadDir, req.file.filename);
@@ -181,7 +246,8 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
       title,
       artist,
       duration,
-      lines: linesWithTime
+      lines: linesWithTime,
+      difficultyChanges: parsedDifficultyChanges
     }, null, 2));
 
     const newSong = {
@@ -210,6 +276,44 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
   }
 });
 
+// Получить полные данные песни по ID
+app.get('/api/songs/:id', (req, res) => {
+  const song = songs.find(s => s.id == req.params.id);
+  if (!song) return res.status(404).json({ error: 'Песня не найдена' });
+  const jsonPath = path.join(uploadDir, song.jsonFile);
+  try {
+    const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    res.json({ ...song, ...data });
+  } catch (e) {
+    res.status(500).json({ error: 'Ошибка чтения файла песни' });
+  }
+});
+
+// Обновить данные песни
+app.put('/api/songs/:id', (req, res) => {
+  const song = songs.find(s => s.id == req.params.id);
+  if (!song) return res.status(404).json({ error: 'Песня не найдена' });
+  const { title, artist, lines, difficultyChanges } = req.body;
+  if (!title || !artist || !Array.isArray(lines)) {
+    return res.status(400).json({ error: 'Неверные данные' });
+  }
+  // Обновляем метаданные в индексе
+  song.title = title;
+  song.artist = artist;
+  // Обновляем JSON-файл
+  const jsonPath = path.join(uploadDir, song.jsonFile);
+  const newData = {
+    title,
+    artist,
+    duration: song.duration,
+    lines: lines.map(l => ({ text: l.text, time: parseFloat(l.time) })),
+    difficultyChanges: difficultyChanges || []
+  };
+  fs.writeFileSync(jsonPath, JSON.stringify(newData, null, 2));
+  saveSongsIndex(); // сохраняем индекс с обновлённым названием/исполнителем
+  res.json({ success: true });
+});
+
 const rooms = new Map();
 
 io.on('connection', (socket) => {
@@ -235,7 +339,7 @@ io.on('connection', (socket) => {
     
     rooms.set(roomId, {
       players: new Map(),
-      song: { ...song, lines: songData.lines, duration: songData.duration },
+      song: { ...song, lines: songData.lines, duration: songData.duration, difficultyChanges: songData.difficultyChanges },
       gameActive: false,
       hostId: socket.id,
       roomId: roomId,
@@ -382,19 +486,16 @@ function startGameLoop(roomId) {
       room.answeredPlayers.clear();
       const correctLine = lines[i];
       
-      // Генерация вариантов
-      const distractors = getDistractors(correctLine.text, lines, 3);
-      let options = [correctLine.text, ...distractors];
-      for (let j = options.length - 1; j > 0; j--) {
-        const k = Math.floor(Math.random() * (j + 1));
-        [options[j], options[k]] = [options[k], options[j]];
-      }
-      
+      // Генерация вариантов      
+      const difficulty = getDifficultyAtTime(room.song.difficultyChanges, line.time);
+      const options = getOptionsForLine(correctLine.text, room.song.lines, difficulty);
+
       io.to(roomId).emit('newQuestion', {
         lineIndex: i,
         correctText: correctLine.text,
         options: options,
-        time: correctLine.time
+        time: correctLine.time,
+        difficulty: difficulty
       });
       
       // Длительность текущей строки (до следующей или конца песни)

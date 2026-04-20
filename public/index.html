@@ -52,6 +52,27 @@
             <button class="backBtn">Назад</button>
         </div>
 
+        <!-- Редактирование песни -->
+        <div id="editSongScreen" class="screen">
+            <h2>Редактирование песни: <span id="editSongTitle"></span></h2>
+            <div class="edit-section">
+                <label>Название: <input type="text" id="editSongName" placeholder="Название"></label>
+                <label>Исполнитель: <input type="text" id="editSongArtist" placeholder="Исполнитель"></label>
+            </div>
+            <div class="edit-section">
+                <h3>Строки и тайминги</h3>
+                <div id="linesEditor"></div>
+                <button id="addLineBtn">+ Добавить строку</button>
+            </div>
+            <div class="edit-section">
+                <h3>Настройки сложности</h3>
+                <div id="difficultyEditor"></div>
+                <button id="addDifficultyRuleBtn">+ Добавить правило</button>
+            </div>
+            <button id="saveSongBtn">💾 Сохранить изменения</button>
+            <button class="backBtn">Назад</button>
+        </div>
+
         <!-- Лобби (ожидание игроков) -->
         <div id="lobbyScreen" class="screen">
             <h2>Лобби: <span id="roomCodeDisplay"></span></h2>

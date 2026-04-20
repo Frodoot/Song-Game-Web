@@ -6,6 +6,7 @@ const screens = {
     create: document.getElementById('createGameScreen'),
     join: document.getElementById('joinGameScreen'),
     add: document.getElementById('addSongScreen'),
+    editSong: document.getElementById('editSongScreen'),
     lobby: document.getElementById('lobbyScreen'),
     game: document.getElementById('gameScreen')
 };
@@ -33,6 +34,10 @@ async function loadSongs() {
         card.className = 'song-card';
         card.innerHTML = `<strong>${song.title}</strong><br>${song.artist}`;
         container.appendChild(card);
+
+        card.innerHTML = `<strong>${song.title}</strong><br>${song.artist}<br>
+        <button class="edit-song-btn" data-id="${song.id}">✏️</button>`;
+        card.querySelector('.edit-song-btn').onclick = () => openEditor(song.id);
     });
     
     // Обновляем селекты
@@ -98,6 +103,175 @@ document.getElementById('createGameBtn').onclick = () => showScreen('create');
 document.getElementById('joinGameBtn').onclick = () => showScreen('join');
 document.getElementById('addSongBtn').onclick = () => showScreen('add');
 document.querySelectorAll('.backBtn').forEach(btn => btn.onclick = () => showScreen('main'));
+
+let currentEditSongId = null;
+let currentEditLines = [];       // массив { text, time }
+let currentEditDifficulty = [];  // массив { afterDuration, difficulty }
+
+// Простая функция экранирования HTML
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Открыть редактор песни
+async function openEditor(songId) {
+  currentEditSongId = songId;
+  try {
+    const res = await fetch(`/api/songs/${songId}`);
+    const song = await res.json();
+    document.getElementById('editSongTitle').innerText = `${escapeHtml(song.artist)} - ${escapeHtml(song.title)}`;
+    currentEditLines = song.lines.map(l => ({ text: l.text, time: l.time }));
+    currentEditDifficulty = song.difficultyChanges || [];
+    renderLinesEditor();
+    renderDifficultyEditor();
+    document.getElementById('editSongName').value = song.title;
+    document.getElementById('editSongArtist').value = song.artist;
+    showScreen('editSong');
+  } catch (err) {
+    console.error(err);
+    alert('Не удалось загрузить песню');
+  }
+}
+
+// Отрисовка редактора строк
+function renderLinesEditor() {
+  const container = document.getElementById('linesEditor');
+  container.innerHTML = '';
+  currentEditLines.forEach((line, idx) => {
+    const div = document.createElement('div');
+    div.className = 'line-editor-row';
+    div.innerHTML = `
+      <input type="text" class="line-text" value="${escapeHtml(line.text)}" data-idx="${idx}">
+      <input type="number" step="0.01" class="line-time" value="${line.time}" data-idx="${idx}">
+      <button class="remove-line-btn" data-idx="${idx}">🗑️</button>
+    `;
+    container.appendChild(div);
+  });
+  // Привязываем события удаления
+  document.querySelectorAll('.remove-line-btn').forEach(btn => {
+    btn.onclick = () => removeLine(parseInt(btn.dataset.idx));
+  });
+}
+
+// Отрисовка редактора правил сложности
+function renderDifficultyEditor() {
+  const container = document.getElementById('difficultyEditor');
+  container.innerHTML = '';
+  currentEditDifficulty.forEach((rule, idx) => {
+    const div = document.createElement('div');
+    div.className = 'difficulty-rule-row';
+    div.innerHTML = `
+      <input type="number" step="0.1" class="rule-after" value="${rule.afterDuration}" placeholder="Время (сек)" data-idx="${idx}">
+      <input type="number" class="rule-difficulty" value="${rule.difficulty}" min="2" placeholder="Кол-во кнопок" data-idx="${idx}">
+      <button class="remove-rule-btn" data-idx="${idx}">🗑️</button>
+    `;
+    container.appendChild(div);
+  });
+  document.querySelectorAll('.remove-rule-btn').forEach(btn => {
+    btn.onclick = () => removeDifficultyRule(parseInt(btn.dataset.idx));
+  });
+}
+
+// Удаление строки
+function removeLine(index) {
+  if (index >= 0 && index < currentEditLines.length) {
+    currentEditLines.splice(index, 1);
+    renderLinesEditor();
+  }
+}
+
+// Удаление правила сложности
+function removeDifficultyRule(index) {
+  if (index >= 0 && index < currentEditDifficulty.length) {
+    currentEditDifficulty.splice(index, 1);
+    renderDifficultyEditor();
+  }
+}
+
+// Добавление пустой строки
+document.getElementById('addLineBtn').onclick = () => {
+  currentEditLines.push({ text: 'Новая строка', time: 0 });
+  renderLinesEditor();
+};
+
+// Добавление правила сложности
+document.getElementById('addDifficultyRuleBtn').onclick = () => {
+  currentEditDifficulty.push({ afterDuration: 0, difficulty: 2 });
+  renderDifficultyEditor();
+};
+
+// Сохранение изменений
+document.getElementById('saveSongBtn').onclick = async () => {
+  // Собираем строки из полей ввода (актуальные значения)
+  const lineTexts = document.querySelectorAll('#linesEditor .line-text');
+  const lineTimes = document.querySelectorAll('#linesEditor .line-time');
+  const updatedLines = [];
+  for (let i = 0; i < lineTexts.length; i++) {
+    const text = lineTexts[i].value.trim();
+    const time = parseFloat(lineTimes[i].value);
+    if (text && !isNaN(time)) {
+      updatedLines.push({ text, time });
+    } else {
+      alert(`Строка ${i+1} имеет некорректные данные`);
+      return;
+    }
+  }
+  // Сортируем строки по времени
+  updatedLines.sort((a,b) => a.time - b.time);
+  
+  // Собираем правила сложности
+  const ruleAfters = document.querySelectorAll('#difficultyEditor .rule-after');
+  const ruleDifficulties = document.querySelectorAll('#difficultyEditor .rule-difficulty');
+  const updatedDifficulty = [];
+  for (let i = 0; i < ruleAfters.length; i++) {
+    const after = parseFloat(ruleAfters[i].value);
+    const diff = parseInt(ruleDifficulties[i].value);
+    if (!isNaN(after) && !isNaN(diff) && diff >= 2) {
+      updatedDifficulty.push({ afterDuration: after, difficulty: diff });
+    } else {
+      alert(`Правило ${i+1} имеет некорректные данные (afterDuration число, difficulty целое ≥2)`);
+      return;
+    }
+  }
+  // Сортируем правила по времени
+  updatedDifficulty.sort((a,b) => a.afterDuration - b.afterDuration);
+  
+  // Получаем текущие название и исполнитель из заголовка (можно добавить поля редактирования)
+  // Для простоты добавим скрытые поля или модалку – но пока просто используем старые значения.
+  // Предположим, что название и исполнитель нельзя изменить в этом редакторе.
+  // Чтобы их изменить – нужно добавить соответствующие поля в editSongScreen.
+  // Но по заданию достаточно строк и сложности. Оставим как есть.
+  
+  try {
+    const res = await fetch(`/api/songs/${currentEditSongId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: document.getElementById('editSongTitle').innerText.split(' - ')[1] || '',
+        artist: document.getElementById('editSongTitle').innerText.split(' - ')[0] || '',
+        lines: updatedLines,
+        difficultyChanges: updatedDifficulty
+      })
+    });
+    if (res.ok) {
+      alert('Песня сохранена!');
+      showScreen('main');
+      loadSongs(); // обновляем список песен
+    } else {
+      const err = await res.json();
+      alert('Ошибка: ' + err.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Ошибка сети');
+  }
+};
 
 // Создание комнаты
 document.getElementById('confirmCreateBtn').onclick = () => {
