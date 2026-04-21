@@ -201,8 +201,8 @@ app.get('/api/songs', (req, res) => {
       title: s.title,
       artist: s.artist,
       duration: s.duration,
-      audioUrl: `/uploads/${s.audioFile}`,
-      jsonUrl: `/uploads/${s.jsonFile}`,
+      audioUrl: `/songs/${s.audioFile}`,
+      jsonUrl: `/songs/${s.jsonFile}`,
       canEdit: currentToken && ownerToken && currentToken === ownerToken
     };
   });
@@ -288,8 +288,8 @@ app.post('/api/songs', upload.single('audio'), async (req, res) => {
       title,
       artist,
       duration,
-      audioUrl: `/uploads/${req.file.filename}`,
-      jsonUrl: `/uploads/${jsonFilename}`
+      audioUrl: `/songs/${req.file.filename}`,
+      jsonUrl: `/songs/${jsonFilename}`
     });
   } catch (err) {
     console.error(err);
@@ -304,7 +304,7 @@ app.get('/api/songs/:id', (req, res) => {
   const jsonPath = path.join(uploadDir, song.jsonFile);
   try {
     const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-    res.json({ ...song, ...data });
+    res.json({ ...song, ...data, audioUrl: `/songs/${song.audioFile}`});
   } catch (e) {
     res.status(500).json({ error: 'Ошибка чтения файла песни' });
   }
@@ -404,6 +404,43 @@ app.post('/api/songs/:id/copy', (req, res) => {
   saveSongsIndex();
   
   res.status(201).json({ id: newSong.id });
+});
+
+app.delete('/api/songs/:id', (req, res) => {
+  const songId = parseInt(req.params.id);
+  const songIndex = songs.findIndex(s => s.id === songId);
+  if (songIndex === -1) return res.status(404).json({ error: 'Песня не найдена' });
+  
+  const song = songs[songIndex];
+  const jsonPath = path.join(uploadDir, song.jsonFile);
+  let songData;
+  try {
+    songData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+  } catch(e) {
+    return res.status(500).json({ error: 'Ошибка чтения файла песни' });
+  }
+  
+  const currentToken = req.cookies.songOwnerToken;
+  if (!currentToken || songData.ownerToken !== currentToken) {
+    return res.status(403).json({ error: 'Нет прав на удаление этой песни' });
+  }
+  
+  // Удаляем JSON-файл
+  fs.unlinkSync(jsonPath);
+  
+  // Не удаляем MP3, т.к. он может использоваться другими песнями (копиями)
+  // Но для экономии места можно проверить, есть ли другие песни с этим же audioFile
+  const otherSongUsesAudio = songs.some((s, idx) => idx !== songIndex && s.audioFile === song.audioFile);
+  if (!otherSongUsesAudio) {
+    const audioPath = path.join(uploadDir, song.audioFile);
+    if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+  }
+  
+  // Удаляем из массива и сохраняем индекс
+  songs.splice(songIndex, 1);
+  saveSongsIndex();
+  
+  res.json({ success: true });
 });
 
 const rooms = new Map();

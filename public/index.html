@@ -61,6 +61,10 @@
             </div>
             <div class="edit-section">
                 <h3>Строки и тайминги</h3>
+                <label>
+                    <input type="checkbox" id="syncTimeShiftCheckbox"> 
+                    Синхронизировать сдвиг времени
+                </label>
                 <div id="linesEditor"></div>
                 <button id="addLineBtn">+ Добавить строку</button>
             </div>
@@ -71,6 +75,7 @@
             </div>
             <button id="saveSongBtn">💾 Сохранить изменения</button>
             <button class="backBtn">Назад</button>
+            <audio id="previewAudio" style="display: none;"></audio>
         </div>
 
         <!-- Лобби (ожидание игроков) -->

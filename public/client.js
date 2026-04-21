@@ -17,6 +17,9 @@ let currentLines = []; // массив строк текста для текущ
 let activeLineIndex = -1;
 let gameActive = false;
 
+let currentPreviewAudioUrl = null;
+let currentSongDuration = 0;
+
 // Показать экран
 function showScreen(screenName) {
     Object.values(screens).forEach(screen => screen.classList.remove('active'));
@@ -25,34 +28,45 @@ function showScreen(screenName) {
 
 // Загрузка списка песен
 async function loadSongs() {
-    const res = await fetch('/api/songs');
-    const songs = await res.json();
-    const container = document.getElementById('songsContainer');
-    container.innerHTML = '';
-    songs.forEach(song => {
-        const card = document.createElement('div');
-        card.className = 'song-card';
-        if (song.canEdit) {
-        card.innerHTML = `<strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
-            <button class="edit-song-btn" data-id="${song.id}">✏️ Редактировать</button>`;
-        card.querySelector('.edit-song-btn').onclick = () => openEditor(song.id);
-        } else {
-        card.innerHTML = `<strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
-            <button class="copy-song-btn" data-id="${song.id}">📋 Копировать и редактировать</button>`;
-        card.querySelector('.copy-song-btn').onclick = () => copySong(song.id);
+  const res = await fetch('/api/songs');
+  const songs = await res.json();
+  const container = document.getElementById('songsContainer');
+  container.innerHTML = '';
+  songs.forEach(song => {
+    const card = document.createElement('div');
+    card.className = 'song-card';
+    if (song.canEdit) {
+      card.innerHTML = `
+        <strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
+        <button class="edit-song-btn" data-id="${song.id}">✏️ Редактировать</button>
+        <button class="delete-song-btn" data-id="${song.id}">🗑️ Удалить</button>
+      `;
+      card.querySelector('.edit-song-btn').onclick = () => openEditor(song.id);
+      card.querySelector('.delete-song-btn').onclick = (e) => {
+        e.stopPropagation();
+        if (confirm(`Удалить песню "${song.title}"? Это действие необратимо.`)) {
+          deleteSong(song.id);
         }
-        container.appendChild(card);
-    });
+      };
+    } else {
+      card.innerHTML = `
+        <strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
+        <button class="copy-song-btn" data-id="${song.id}">📋 Копировать и редактировать</button>
+      `;
+      card.querySelector('.copy-song-btn').onclick = () => copySong(song.id);
+    }
+    container.appendChild(card);
+  });
     
-    // Обновляем селекты
-    const selectCreate = document.getElementById('songSelectCreate');
-    selectCreate.innerHTML = '<option disabled selected>Выберите песню</option>';
-    songs.forEach(song => {
-        const option = document.createElement('option');
-        option.value = song.id;
-        option.textContent = `${song.artist} - ${song.title}`;
-        selectCreate.appendChild(option);
-    });
+  // Обновляем селекты
+  const selectCreate = document.getElementById('songSelectCreate');
+  selectCreate.innerHTML = '<option disabled selected>Выберите песню</option>';
+  songs.forEach(song => {
+      const option = document.createElement('option');
+      option.value = song.id;
+      option.textContent = `${song.artist} - ${song.title}`;
+      selectCreate.appendChild(option);
+  });
 }
 
 async function copySong(songId) {
@@ -67,6 +81,21 @@ async function copySong(songId) {
     } else {
       const err = await res.json();
       alert('Ошибка копирования: ' + err.error);
+    }
+  } catch(err) {
+    alert('Ошибка сети');
+  }
+}
+
+async function deleteSong(songId) {
+  try {
+    const res = await fetch(`/api/songs/${songId}`, { method: 'DELETE' });
+    if (res.ok) {
+      alert('Песня удалена');
+      loadSongs(); // обновляем список
+    } else {
+      const err = await res.json();
+      alert('Ошибка удаления: ' + err.error);
     }
   } catch(err) {
     alert('Ошибка сети');
@@ -148,6 +177,9 @@ async function openEditor(songId) {
     const res = await fetch(`/api/songs/${songId}`);
     const song = await res.json();
 
+    currentPreviewAudioUrl = song.audioUrl;
+    currentSongDuration = song.duration; 
+
     // Заполняем поля ввода
     document.getElementById('editSongName').value = song.title;
     document.getElementById('editSongArtist').value = song.artist;
@@ -170,19 +202,54 @@ async function openEditor(songId) {
 function renderLinesEditor() {
   const container = document.getElementById('linesEditor');
   container.innerHTML = '';
+  
+  currentEditLines.sort((a,b) => a.time - b.time);
+  
   currentEditLines.forEach((line, idx) => {
     const div = document.createElement('div');
     div.className = 'line-editor-row';
     div.innerHTML = `
       <input type="text" class="line-text" value="${escapeHtml(line.text)}" data-idx="${idx}">
       <input type="number" step="0.01" class="line-time" value="${line.time}" data-idx="${idx}">
+      <button class="preview-line-btn" data-idx="${idx}">▶</button>
       <button class="remove-line-btn" data-idx="${idx}">🗑️</button>
     `;
     container.appendChild(div);
   });
-  // Привязываем события удаления
+  
+  // Обработчики удаления
   document.querySelectorAll('.remove-line-btn').forEach(btn => {
     btn.onclick = () => removeLine(parseInt(btn.dataset.idx));
+  });
+  
+  // Обработчики предпрослушивания
+  document.querySelectorAll('.preview-line-btn').forEach(btn => {
+    btn.onclick = () => previewLine(parseInt(btn.dataset.idx));
+  });
+  
+  // Обработчики изменения времени с синхронизацией
+  const syncCheckbox = document.getElementById('syncTimeShiftCheckbox');
+  document.querySelectorAll('.line-time').forEach(input => {
+    input.onchange = (e) => {
+      const idx = parseInt(e.target.dataset.idx);
+      let newTime = parseFloat(e.target.value);
+      if (isNaN(newTime)) return;
+      
+      const oldTime = currentEditLines[idx].time;
+      const delta = newTime - oldTime;
+      
+      if (syncCheckbox.checked && delta !== 0) {
+        for (let i = idx; i < currentEditLines.length; i++) {
+          currentEditLines[i].time += delta;
+          if (currentEditLines[i].time < 0) currentEditLines[i].time = 0;
+        }
+      } else {
+        currentEditLines[idx].time = newTime;
+      }
+      
+      currentEditLines.sort((a,b) => a.time - b.time);
+      renderLinesEditor();
+    };
   });
 }
 
@@ -209,6 +276,7 @@ function renderDifficultyEditor() {
 function removeLine(index) {
   if (index >= 0 && index < currentEditLines.length) {
     currentEditLines.splice(index, 1);
+    currentEditLines.sort((a,b) => a.time - b.time);
     renderLinesEditor();
   }
 }
@@ -224,8 +292,47 @@ function removeDifficultyRule(index) {
 // Добавление пустой строки
 document.getElementById('addLineBtn').onclick = () => {
   currentEditLines.push({ text: 'Новая строка', time: 0 });
+  currentEditLines.sort((a,b) => a.time - b.time);
   renderLinesEditor();
 };
+
+function previewLine(lineIndex) {
+  if (!currentPreviewAudioUrl) {
+    alert('Аудио недоступно');
+    return;
+  }
+  const audio = document.getElementById('previewAudio');
+  if (!audio) return;
+  
+  // Получаем время начала и окончания
+  const startTime = currentEditLines[lineIndex].time;
+  const nextLine = currentEditLines[lineIndex + 1];
+  let endTime = nextLine ? nextLine.time : currentSongDuration;
+  if (endTime <= startTime) endTime = startTime + 5; // запас 5 секунд
+  
+  // Останавливаем текущее воспроизведение
+  audio.pause();
+  audio.currentTime = 0;
+  if (window.previewTimeout) clearTimeout(window.previewTimeout);
+  
+  // Запускаем воспроизведение
+  audio.src = currentPreviewAudioUrl;
+  audio.currentTime = startTime;
+  audio.play().catch(e => console.log('Автовоспроизведение заблокировано', e));
+  
+  // Останавливаем через нужный интервал
+  const duration = endTime - startTime;
+  window.previewTimeout = setTimeout(() => {
+    audio.pause();
+    audio.currentTime = 0;
+  }, duration * 1000);
+  
+  // Очищаем таймаут при ручной паузе
+  audio.onpause = () => {
+    clearTimeout(window.previewTimeout);
+    audio.onpause = null;
+  };
+}
 
 // Добавление правила сложности
 document.getElementById('addDifficultyRuleBtn').onclick = () => {

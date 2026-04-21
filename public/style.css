@@ -130,6 +130,18 @@ input::placeholder {
     transform: scale(1.02);
 }
 
+.song-card button {
+  margin: 5px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+}
+.delete-song-btn {
+  background-color: #dc3545;
+}
+.delete-song-btn:hover {
+  background-color: #c82333;
+}
+
 #playersList {
     display: flex;
     flex-wrap: wrap;
@@ -317,4 +329,16 @@ input::placeholder {
   0% { opacity: 1; transform: translateX(-50%) translateY(0); }
   70% { opacity: 1; }
   100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+}
+
+.preview-line-btn {
+  background-color: #4caf50;
+  margin-right: 5px;
+  padding: 5px 10px;
+}
+.preview-line-btn:hover {
+  background-color: #45a049;
+}
+.line-editor-row button {
+  margin-left: 5px;
 }
