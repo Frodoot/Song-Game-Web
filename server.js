@@ -438,7 +438,8 @@ io.on('connection', (socket) => {
       questionTimeouts: [],   // массив таймаутов для всех строк
       currentLineTimeout: null, // таймаут закрытия текущего вопроса
       currentLineIndex: -1,
-      answeredPlayers: new Set()
+      answeredPlayers: new Set(),
+      playersReady: new Set()
     });
     
     socket.join(roomId);
@@ -474,6 +475,8 @@ io.on('connection', (socket) => {
       return;
     }
     if (room.gameActive) return;
+
+    room.playersReady.clear();
     
     room.gameActive = true;
     room.currentLineIndex = -1;
@@ -482,10 +485,24 @@ io.on('connection', (socket) => {
     }
     io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
     io.to(roomId).emit('gameStarting', { song: { ...room.song, audioUrl: `/songs/${room.song.audioFile}` } });
-    
-    startGameLoop(roomId);
   });
   
+// Клиент сообщает, что он загрузил аудио и готов
+socket.on('clientReady', ({ roomId }) => {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  // Добавляем клиента в Set готовых
+  room.playersReady.add(socket.id);
+
+  const allPlayerIds = Array.from(room.players.keys());
+  const allReady = allPlayerIds.every(playerId => room.playersReady.has(playerId));
+
+  if (allReady) {
+    startGameLoop(roomId);
+  }
+});
+
 // Обработчик ответа игрока
 socket.on('pressLine', ({ roomId, selectedText }) => {
   const room = rooms.get(roomId);
@@ -554,6 +571,8 @@ function startGameLoop(roomId) {
   const room = rooms.get(roomId);
   if (!room || !room.gameActive) return;
   
+  io.to(roomId).emit('gameLoopStart');
+
   const lines = room.song.lines;
   if (!lines.length) {
     endGame(roomId);

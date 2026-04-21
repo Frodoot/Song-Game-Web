@@ -360,17 +360,33 @@ let currentQuestionIndex = -1;
 let currentOptions = [];
 let hasAnswered = false;
 
-socket.on('gameStarting', ({ song }) => {
+socket.on('gameStarting', async ({ song }) => {
   currentSong = song;
   gameActive = true;
   currentQuestionIndex = -1;
   hasAnswered = false;
+
   showScreen('game');
+
   const audio = document.getElementById('gameAudio');
   audio.src = currentSong.audioUrl;
-  audio.play().catch(e => console.log('Автовоспроизведение заблокировано', e));
+  await new Promise((resolve, reject) => {
+    audio.addEventListener('canplaythrough', resolve, { once: true });
+    audio.addEventListener('error', reject, { once: true });
+    audio.load();
+  });
+
+  // Аудио готово – сообщаем серверу
+  socket.emit('clientReady', { roomId: currentRoomId });
+
   document.getElementById('currentLyricDisplay').innerHTML = 'Приготовьтесь...';
   document.getElementById('optionsContainer').innerHTML = '';
+});
+
+socket.on('gameLoopStart', () => {
+  if (gameAudio) {
+    gameAudio.play().catch(e => console.warn(e));
+  }
 });
 
 socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
