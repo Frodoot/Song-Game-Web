@@ -12,14 +12,17 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "@lumen-labs-dev/whisper-node": "^0.4.1",
     "axios": "^1.15.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^4.22.1",
+    "fluent-ffmpeg": "^2.1.2",
     "mp3-duration": "^1.1.0",
     "multer": "^2.1.1",
     "socket": "^1.1.84",
     "socket.io": "^4.8.3",
+    "tmp": "^0.2.5",
     "uuid": "^8.3.2"
   }
 }

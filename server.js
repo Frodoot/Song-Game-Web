@@ -5,11 +5,20 @@ const cors = require('cors');
 const axios = require('axios');
 const multer = require('multer');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 const getMP3Duration = require('mp3-duration');
 
 const cookieParser = require('cookie-parser');
 const { v4: uuidv4 } = require('uuid');
+
+const ffmpeg = require('fluent-ffmpeg');
+const { tmpName } = require('tmp');
+const { promisify } = require('util');
+const tmpNameAsync = promisify(tmpName);
+const FormData = require('form-data');
+
+const { whisper } = require('@lumen-labs-dev/whisper-node');
 
 const app = express();
 const server = http.createServer(app);
@@ -209,92 +218,98 @@ app.get('/api/songs', (req, res) => {
   res.json(songsList);
 });
 
-// API: добавить новую песню (загрузка MP3)
-app.post('/api/songs', upload.single('audio'), async (req, res) => {
-  try {
-    const { title, artist, difficultyChanges } = req.body;
-    if (!title || !artist || !req.file) {
-      return res.status(400).json({ error: 'Не заполнены название, исполнитель или не загружен MP3' });
-    }
-
-    let parsedDifficultyChanges = [];
-    if (difficultyChanges && difficultyChanges.trim()) {
-      try {
-        parsedDifficultyChanges = JSON.parse(difficultyChanges);
-        // Простая валидация
-        if (!Array.isArray(parsedDifficultyChanges)) throw new Error();
-        for (const item of parsedDifficultyChanges) {
-          if (typeof item.afterDuration !== 'number' || typeof item.difficulty !== 'number' || item.difficulty < 2) {
-            throw new Error();
-          }
-        }
-      } catch(e) {
-        return res.status(400).json({ error: 'Неверный формат difficultyChanges' });
-      }
-    }
-
-    const audioPath = path.join(uploadDir, req.file.filename);
-    
-    // Получаем длительность из MP3
-    let duration;
+// API: добавить новую песню
+app.post('/api/songs', upload.single('media'), async (req, res) => {
+    let tempAudioPath = null;
     try {
-      duration = await new Promise((resolve, reject) => {
-        getMP3Duration(audioPath, (err, dur) => {
-          if (err) reject(err);
-          else resolve(dur);
-        });
-      });
+        const { title, artist } = req.body;
+        const file = req.file;
+        if (!title || !artist || !file) {
+            throw new Error('Не заполнены название, исполнитель или файл');
+        }
+
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isVideo = ['.mp4', '.webm', '.avi', '.mov', '.mkv'].includes(ext);
+        const isAudio = ['.mp3', '.m4a', '.wav', '.ogg'].includes(ext);
+        if (!isVideo && !isAudio) {
+            throw new Error('Неподдерживаемый формат. Загрузите MP3, M4A или видео.');
+        }
+
+        let audioPathForProcessing = file.path;
+        if (isVideo) {
+            console.log('Извлечение аудио из видео...');
+            tempAudioPath = await extractAudioFromVideo(file.path);
+            audioPathForProcessing = tempAudioPath;
+            console.log('Аудио извлечено:', tempAudioPath);
+        }
+
+        // Длительность
+        let duration = null;
+        try {
+            duration = await getAudioDuration(audioPathForProcessing);
+            console.log('Длительность:', duration);
+        } catch (err) {
+            console.warn('Не удалось получить длительность:', err.message);
+        }
+
+        // Получение текста: сначала LRCLIB (только для аудио), затем транскрипция
+        let lines = null;
+        if (!isVideo) {
+            lines = await fetchSyncedLyricsFromLRCLIB(artist, title);
+            if (lines) console.log(`LRCLIB: ${lines.length} строк`);
+        }
+
+        if (!lines || lines.length === 0) {
+            console.log('Транскрипция аудио...');
+            lines = await transcribeAudio(audioPathForProcessing);
+            console.log(`Транскрипция: ${lines.length} строк`);
+        }
+
+        if (!lines || lines.length === 0) {
+            throw new Error('Не удалось получить текст песни');
+        }
+
+        if (!duration || duration === 0) {
+            duration = lines[lines.length - 1].time + 2;
+        }
+
+        // Сохраняем JSON
+        const jsonFilename = file.filename.replace(/\.[^/.]+$/, '.json');
+        const jsonPath = path.join(uploadDir, jsonFilename);
+        const ownerToken = req.cookies.songOwnerToken || uuidv4();
+        res.cookie('songOwnerToken', ownerToken, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true });
+
+        const songData = {
+            title,
+            artist,
+            duration,
+            lines,
+            difficultyChanges: [],
+            ownerToken,
+            originalFormat: isVideo ? 'video' : 'audio'
+        };
+        await fsPromises.writeFile(jsonPath, JSON.stringify(songData, null, 2));
+
+        const newSong = {
+            id: nextSongId++,
+            title,
+            artist,
+            duration,
+            audioFile: file.filename,
+            jsonFile: jsonFilename
+        };
+        songs.push(newSong);
+        saveSongsIndex();
+
+        if (tempAudioPath) await fsPromises.unlink(tempAudioPath).catch(() => {});
+        res.status(201).json({ id: newSong.id, title, artist, duration, audioUrl: `/songs/${file.filename}` });
+
     } catch (err) {
-      fs.unlinkSync(audioPath);
-      return res.status(400).json({ error: 'Не удалось прочитать длительность MP3-файла' });
+        console.error('Ошибка при добавлении песни:', err);
+        if (req.file) await fsPromises.unlink(req.file.path).catch(() => {});
+        if (tempAudioPath) await fsPromises.unlink(tempAudioPath).catch(() => {});
+        res.status(500).json({ error: err.message });
     }
-
-    const linesWithTime = await fetchSyncedLyricsFromLRCLIB(artist, title);
-    if (!linesWithTime || linesWithTime.length === 0) {
-      fs.unlinkSync(audioPath);
-      return res.status(404).json({ error: 'Синхронизированный текст не найден. Попробуйте другую песню.' });
-    }
-
-    const ownerToken = req.cookies.songOwnerToken || uuidv4();
-    // Устанавливаем cookie на 365 дней
-    res.cookie('songOwnerToken', ownerToken, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true });
-
-    // Сохраняем JSON файл
-    const jsonFilename = req.file.filename.replace('.mp3', '.json');
-    const jsonPath = path.join(uploadDir, jsonFilename);
-    fs.writeFileSync(jsonPath, JSON.stringify({
-      title,
-      artist,
-      duration,
-      lines: linesWithTime,
-      difficultyChanges: parsedDifficultyChanges || [],
-      ownerToken: ownerToken
-    }, null, 2));
-
-    const newSong = {
-      id: nextSongId++,
-      title,
-      artist,
-      duration,
-      audioFile: req.file.filename,
-      jsonFile: jsonFilename
-    };
-
-    songs.push(newSong);
-    saveSongsIndex();
-
-    res.status(201).json({
-      id: newSong.id,
-      title,
-      artist,
-      duration,
-      audioUrl: `/songs/${req.file.filename}`,
-      jsonUrl: `/songs/${jsonFilename}`
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  }
 });
 
 // Получить полные данные песни по ID
@@ -442,6 +457,77 @@ app.delete('/api/songs/:id', (req, res) => {
   
   res.json({ success: true });
 });
+
+// Функция извлечения аудио из видео
+async function extractAudioFromVideo(videoPath) {
+    const audioPath = await tmpNameAsync({ postfix: '.mp3' });
+    return new Promise((resolve, reject) => {
+        ffmpeg(videoPath)
+            .output(audioPath)
+            .audioCodec('libmp3lame')
+            .audioBitrate(128)
+            .on('end', () => resolve(audioPath))
+            .on('error', (err) => reject(new Error(`FFmpeg error: ${err.message}`)))
+            .run();
+    });
+}
+
+// Функция получения длительности через ffprobe
+function getAudioDuration(filePath) {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+            if (err) reject(new Error(`ffprobe error: ${err.message}`));
+            else resolve(metadata.format.duration);
+        });
+    });
+}
+
+// Транскрипция через Whisper
+async function transcribeAudio(audioPath) {
+    console.log(`Начинаю транскрипцию файла: ${audioPath}`);
+
+    // Настройки для получения результата с таймкодами
+    const options = {
+        modelName: "base",
+        whisperOptions: {
+            language: 'ru',
+            outputInText: false,
+            outputInJson: false,
+            outputInSrt: false,
+            word_timestamps: true,
+        }
+    };
+
+    try {
+        const result = await whisper(audioPath, options);
+        
+        if (result && result.length > 0) {
+            const formattedLines = result.map(line => ({
+                text: line.speech.trim(),
+                time: parseTimeStringToSeconds(line.start)
+            }));
+            console.log(`Успешно распознано ${formattedLines.length} строк.`);
+            return formattedLines;
+        } else {
+            throw new Error('Результат транскрипции пуст');
+        }
+    } catch (error) {
+        console.error('Ошибка во время локальной транскрипции:', error);
+        throw new Error(`Ошибка Whisper: ${error.message}`);
+    }
+}
+
+// Вспомогательная функция для преобразования строки времени "00:00:01.500" в секунды (1.5)
+function parseTimeStringToSeconds(timeString) {
+    const parts = timeString.split(':');
+    if (parts.length === 3) {
+        const hours = parseFloat(parts[0]);
+        const minutes = parseFloat(parts[1]);
+        const seconds = parseFloat(parts[2]);
+        return (hours * 3600) + (minutes * 60) + seconds;
+    }
+    return 0;
+}
 
 const rooms = new Map();
 

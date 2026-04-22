@@ -103,37 +103,33 @@ async function deleteSong(songId) {
 }
 
 // Добавление песни (с загрузкой файла)
-document.getElementById('submitSongBtn').addEventListener('click', async () => {
+document.getElementById('submitSongBtn').onclick = async () => {
     const title = document.getElementById('songTitle').value.trim();
     const artist = document.getElementById('songArtist').value.trim();
-    const fileInput = document.getElementById('songAudioFile');
+    const fileInput = document.getElementById('songMediaFile');
     const file = fileInput.files[0];
     
     if (!title || !artist || !file) {
-        document.getElementById('addSongStatus').innerHTML = '<span style="color:red;">Заполните все поля и выберите MP3 файл</span>';
+        document.getElementById('addSongStatus').innerHTML = '<span style="color:red;">Заполните все поля и выберите файл</span>';
         return;
     }
     
     const formData = new FormData();
     formData.append('title', title);
     formData.append('artist', artist);
-    formData.append('audio', file);
+    formData.append('media', file);
     
     document.getElementById('submitSongBtn').disabled = true;
-    document.getElementById('addSongStatus').innerHTML = 'Загрузка MP3 и получение текста...';
+    document.getElementById('addSongStatus').innerHTML = 'Загрузка и обработка файла...';
     
     try {
-        const res = await fetch('/api/songs', {
-            method: 'POST',
-            body: formData
-        });
+        const res = await fetch('/api/songs', { method: 'POST', body: formData });
         if (res.ok) {
             document.getElementById('addSongStatus').innerHTML = '<span style="color:lightgreen;">Песня добавлена!</span>';
             setTimeout(() => {
                 document.getElementById('addSongStatus').innerHTML = '';
                 showScreen('main');
                 loadSongs();
-                // Очистка полей
                 document.getElementById('songTitle').value = '';
                 document.getElementById('songArtist').value = '';
                 fileInput.value = '';
@@ -147,7 +143,7 @@ document.getElementById('submitSongBtn').addEventListener('click', async () => {
     } finally {
         document.getElementById('submitSongBtn').disabled = false;
     }
-});
+};
 
 // Навигация
 document.getElementById('createGameBtn').onclick = () => showScreen('create');
