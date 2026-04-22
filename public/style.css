@@ -342,3 +342,205 @@ input::placeholder {
 .line-editor-row button {
   margin-left: 5px;
 }
+
+/* Редактор строк */
+.lines-editor-container {
+  margin: 15px 0;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #4a4a6a;
+  border-radius: 16px;
+  padding: 10px;
+  background: #1e1e2f;
+}
+
+.line-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  background: #2e2e42;
+  padding: 8px 12px;
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.line-editor-row .line-text {
+  flex: 3;
+  min-width: 200px;
+  background: #3a3a55;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.line-editor-row .time-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #3a3a55;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.line-editor-row .time-wrapper label {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin: 0;
+}
+
+.line-editor-row .line-time {
+  width: 90px;
+  background: transparent;
+  border: none;
+  color: #feca57;
+  font-weight: bold;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.line-editor-row button {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+
+.preview-line-btn {
+  background-color: #4caf50;
+}
+.preview-line-btn:hover {
+  background-color: #45a049;
+}
+
+.remove-line-btn {
+  background-color: #dc3545;
+}
+.remove-line-btn:hover {
+  background-color: #c82333;
+}
+
+/* Чекбокс синхронизации */
+.sync-checkbox-wrapper {
+  margin: 15px 0;
+  background: #2e2e42;
+  padding: 10px 15px;
+  border-radius: 40px;
+  display: inline-block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sync-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.sync-checkbox-label input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Редактор сложности */
+.difficulty-rules-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 50px;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 0 10px;
+  font-weight: bold;
+  color: #feca57;
+  font-size: 0.9rem;
+}
+
+.difficulty-editor-container {
+  margin-bottom: 15px;
+}
+
+.difficulty-rule-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 50px;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+  background: #2e2e42;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.difficulty-rule-row input {
+  background: #3a3a55;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  color: white;
+}
+
+.difficulty-rule-row button {
+  background: #dc3545;
+  padding: 6px;
+  margin: 0;
+}
+
+.difficulty-note {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.edit-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 25px;
+}
+
+.edit-section {
+  background: rgba(0,0,0,0.3);
+  padding: 15px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+
+.edit-section h3 {
+  text-align: left;
+  margin-bottom: 15px;
+  border-left: 4px solid #ff6b6b;
+  padding-left: 12px;
+}
+
+.info-fields {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.info-fields label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #2e2e42;
+  padding: 8px 16px;
+  border-radius: 40px;
+}
+
+.info-fields input {
+  background: #3a3a55;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: white;
+}

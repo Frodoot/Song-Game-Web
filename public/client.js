@@ -198,6 +198,11 @@ async function openEditor(songId) {
   }
 }
 
+// Вспомогательная функция округления времени до 2 знаков
+function roundTime(t) {
+    return Math.round(t * 100) / 100;
+}
+
 // Отрисовка редактора строк
 function renderLinesEditor() {
   const container = document.getElementById('linesEditor');
@@ -210,9 +215,12 @@ function renderLinesEditor() {
     div.className = 'line-editor-row';
     div.innerHTML = `
       <input type="text" class="line-text" value="${escapeHtml(line.text)}" data-idx="${idx}">
-      <input type="number" step="0.01" class="line-time" value="${line.time}" data-idx="${idx}">
-      <button class="preview-line-btn" data-idx="${idx}">▶</button>
-      <button class="remove-line-btn" data-idx="${idx}">🗑️</button>
+      <div class="time-wrapper">
+        <label>⏱️ сек</label>
+        <input type="number" step="0.01" class="line-time" value="${roundTime(line.time).toFixed(2)}" data-idx="${idx}">
+      </div>
+      <button class="preview-line-btn" data-idx="${idx}" title="Прослушать с этого момента">▶</button>
+      <button class="remove-line-btn" data-idx="${idx}" title="Удалить строку">🗑️</button>
     `;
     container.appendChild(div);
   });
@@ -261,9 +269,9 @@ function renderDifficultyEditor() {
     const div = document.createElement('div');
     div.className = 'difficulty-rule-row';
     div.innerHTML = `
-      <input type="number" step="0.1" class="rule-after" value="${rule.afterDuration}" placeholder="Время (сек)" data-idx="${idx}">
-      <input type="number" class="rule-difficulty" value="${rule.difficulty}" min="2" placeholder="Кол-во кнопок" data-idx="${idx}">
-      <button class="remove-rule-btn" data-idx="${idx}">🗑️</button>
+      <input type="number" step="0.1" class="rule-after" value="${rule.afterDuration}" placeholder="секунд" data-idx="${idx}">
+      <input type="number" class="rule-difficulty" value="${rule.difficulty}" min="2" placeholder="кол-во" data-idx="${idx}">
+      <button class="remove-rule-btn" data-idx="${idx}" title="Удалить правило">🗑️</button>
     `;
     container.appendChild(div);
   });

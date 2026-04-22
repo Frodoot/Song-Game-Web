@@ -55,28 +55,47 @@
         <!-- Редактирование песни -->
         <div id="editSongScreen" class="screen">
             <h2>Редактирование песни: <span id="editSongTitle"></span></h2>
+            
             <div class="edit-section">
-                <label>Название: <input type="text" id="editSongName" placeholder="Название"></label>
-                <label>Исполнитель: <input type="text" id="editSongArtist" placeholder="Исполнитель"></label>
+                <h3>Основная информация</h3>
+                <div class="info-fields">
+                <label>Название: <input type="text" id="editSongName" placeholder="Название песни"></label>
+                <label>Исполнитель: <input type="text" id="editSongArtist" placeholder="Имя исполнителя"></label>
+                </div>
             </div>
+
             <div class="edit-section">
+                <audio id="previewAudio" style="display: none;"></audio>
                 <h3>Строки и тайминги</h3>
-                <label>
+                <div class="sync-checkbox-wrapper">
+                <label class="sync-checkbox-label">
                     <input type="checkbox" id="syncTimeShiftCheckbox"> 
-                    Синхронизировать сдвиг времени
+                    <span>🔗 Синхронизировать сдвиг времени</span>
                 </label>
-                <div id="linesEditor"></div>
+                </div>
+                <div id="linesEditor" class="lines-editor-container"></div>
+                <div class="edit-buttons">
                 <button id="addLineBtn">+ Добавить строку</button>
+                </div>
             </div>
+
             <div class="edit-section">
                 <h3>Настройки сложности</h3>
-                <div id="difficultyEditor"></div>
+                <div class="difficulty-rules-header">
+                <span>⏱️ Время (секунды)</span>
+                <span>🎛️ Количество кнопок</span>
+                <span></span>
+                </div>
+                <div id="difficultyEditor" class="difficulty-editor-container"></div>
                 <button id="addDifficultyRuleBtn">+ Добавить правило</button>
+                <div class="difficulty-note">* Количество кнопок не может быть меньше 2. Правила применяются по достижении указанного времени.</div>
             </div>
-            <button id="saveSongBtn">💾 Сохранить изменения</button>
-            <button class="backBtn">Назад</button>
-            <audio id="previewAudio" style="display: none;"></audio>
-        </div>
+
+            <div class="edit-actions">
+                <button id="saveSongBtn">💾 Сохранить изменения</button>
+                <button class="backBtn">Назад</button>
+            </div>
+            </div>
 
         <!-- Лобби (ожидание игроков) -->
         <div id="lobbyScreen" class="screen">
