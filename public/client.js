@@ -170,6 +170,8 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+let audioPreview = null;
+
 // Открыть редактор песни
 async function openEditor(songId) {
   currentEditSongId = songId;
@@ -178,6 +180,8 @@ async function openEditor(songId) {
     const song = await res.json();
 
     currentPreviewAudioUrl = song.audioUrl;
+    audioPreview = document.getElementById('previewAudio');
+    audioPreview.src = currentPreviewAudioUrl;
     currentSongDuration = song.duration; 
 
     // Заполняем поля ввода
@@ -301,8 +305,7 @@ function previewLine(lineIndex) {
     alert('Аудио недоступно');
     return;
   }
-  const audio = document.getElementById('previewAudio');
-  if (!audio) return;
+  if (!audioPreview) return;
   
   // Получаем время начала и окончания
   const startTime = currentEditLines[lineIndex].time;
@@ -311,27 +314,20 @@ function previewLine(lineIndex) {
   if (endTime <= startTime) endTime = startTime + 5; // запас 5 секунд
   
   // Останавливаем текущее воспроизведение
-  audio.pause();
-  audio.currentTime = 0;
+  audioPreview.pause();
+  audioPreview.currentTime = 0;
   if (window.previewTimeout) clearTimeout(window.previewTimeout);
   
   // Запускаем воспроизведение
-  audio.src = currentPreviewAudioUrl;
-  audio.currentTime = startTime;
-  audio.play().catch(e => console.log('Автовоспроизведение заблокировано', e));
+  audioPreview.currentTime = startTime;
+  audioPreview.play().catch(e => console.log('Автовоспроизведение заблокировано', e));
   
   // Останавливаем через нужный интервал
   const duration = endTime - startTime;
   window.previewTimeout = setTimeout(() => {
-    audio.pause();
-    audio.currentTime = 0;
+    audioPreview.pause();
+    audioPreview.currentTime = 0;
   }, duration * 1000);
-  
-  // Очищаем таймаут при ручной паузе
-  audio.onpause = () => {
-    clearTimeout(window.previewTimeout);
-    audio.onpause = null;
-  };
 }
 
 // Добавление правила сложности
