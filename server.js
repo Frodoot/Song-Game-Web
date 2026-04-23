@@ -491,30 +491,14 @@ function getAudioDuration(filePath) {
 
 // Транскрипция через Whisper
 async function transcribeAudio(audioPath) {
-    if (os.platform() === 'win32') {
-        return transcribeWithPython(audioPath);
-    } else {
-        return transcribeWithWhisperCpp(audioPath);
-    }
-}
-
-// Для Windows: существующий Python-скрипт
-async function transcribeWithPython(audioPath) {
-    const pythonCmd = 'python';
-    const { stdout } = await execPromise(`${pythonCmd} transcribe.py "${audioPath}"`);
-    return JSON.parse(stdout).map(seg => ({ text: seg.text, time: seg.start }));
-}
-
-// Для Linux: вызов заранее скомпилированного whisper.cpp
-async function transcribeWithWhisperCpp(audioPath) {
-    const binaryPath = '/Song-Game-Web/whisper_bin/whisper-cli';
-    const modelPath = '/Song-Game-Web/whisper_bin/ggml-base.bin';
-    // Формируем команду с выводом в JSON
-    const command = `${binaryPath} -m ${modelPath} -f ${audioPath} -l ru -oj`;
-
+    console.log(`Транскрипция через Python: ${audioPath}`);
     try {
-        const { stdout, stderr } = await execPromise(command);
-        // Парсим JSON-строку из stdout
+        // Используем 'python3' на Linux, 'python' на Windows — можно сделать универсально
+        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        const { stdout, stderr } = await execPromise(`${pythonCmd} transcribe.py "${audioPath}"`);
+        
+        if (stderr) console.warn('Python stderr:', stderr);
+        
         const result = JSON.parse(stdout);
         
         const transcription = result.transcription || result;
