@@ -10,15 +10,21 @@ const path = require('path');
 const getMP3Duration = require('mp3-duration');
 
 const cookieParser = require('cookie-parser');
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuidv4 } = import('uuid');
 
 const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
+const ffprobeStatic = require('ffprobe-static');
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 const { tmpName } = require('tmp');
 const { promisify } = require('util');
 const tmpNameAsync = promisify(tmpName);
 const FormData = require('form-data');
 
-const { whisper } = require('@lumen-labs-dev/whisper-node');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const app = express();
 const server = http.createServer(app);
@@ -484,36 +490,28 @@ function getAudioDuration(filePath) {
 
 // Транскрипция через Whisper
 async function transcribeAudio(audioPath) {
-    console.log(`Начинаю транскрипцию файла: ${audioPath}`);
-
-    // Настройки для получения результата с таймкодами
-    const options = {
-        modelName: "base",
-        whisperOptions: {
-            language: 'ru',
-            outputInText: false,
-            outputInJson: false,
-            outputInSrt: false,
-            word_timestamps: true,
-        }
-    };
-
+    console.log(`Транскрипция через Python: ${audioPath}`);
     try {
-        const result = await whisper(audioPath, options);
+        // Используем 'python3' на Linux, 'python' на Windows — можно сделать универсально
+        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        const { stdout, stderr } = await execPromise(`${pythonCmd} transcribe.py "${audioPath}"`);
         
-        if (result && result.length > 0) {
-            const formattedLines = result.map(line => ({
-                text: line.speech.trim(),
-                time: parseTimeStringToSeconds(line.start)
-            }));
-            console.log(`Успешно распознано ${formattedLines.length} строк.`);
-            return formattedLines;
-        } else {
-            throw new Error('Результат транскрипции пуст');
-        }
-    } catch (error) {
-        console.error('Ошибка во время локальной транскрипции:', error);
-        throw new Error(`Ошибка Whisper: ${error.message}`);
+        if (stderr) console.warn('Python stderr:', stderr);
+        
+        const result = JSON.parse(stdout);
+        if (result.error) throw new Error(result.error);
+        
+        // Преобразуем в нужный формат { text, time }
+        const lines = result.map(segment => ({
+            text: segment.text,
+            time: segment.start   // время начала строки в секундах
+        }));
+        
+        console.log(`Распознано ${lines.length} строк`);
+        return lines;
+    } catch (err) {
+        console.error('Ошибка при вызове Python:', err);
+        throw new Error(`Python transcription failed: ${err.message}`);
     }
 }
 
