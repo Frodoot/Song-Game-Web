@@ -102,15 +102,16 @@
             <h2>Лобби: <span id="roomCodeDisplay"></span></h2>
             <div id="playersList"></div>
             <div id="lobbySongInfo"></div>
-            <button id="startGameBtn" style="display:none;">▶ Начать игру</button>
-            <button id="leaveLobbyBtn">Выйти</button>
+            <div class="lobby-controls" id="lobby-controls">
+                <button id="leaveLobbyBtn">Выйти</button>
+            </div>
         </div>
 
         <!-- Игровой экран -->
         <div id="gameScreen" class="screen">
             <div class="game-header">
             <div class="scoreboard" id="gameScoreboard"></div>
-            <div class="current-lyric" id="currentLyricDisplay">Готовьтесь...</div>
+            <div class="current-lyric" id="currentLyricDisplay">Ожидание игроков...</div>
             </div>
             <div class="options-container" id="optionsContainer">
             <!-- Здесь динамически будут появляться кнопки вариантов -->

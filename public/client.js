@@ -426,8 +426,38 @@ document.getElementById('confirmCreateBtn').onclick = () => {
 socket.on('roomCreated', ({ roomId }) => {
     currentRoomId = roomId;
     document.getElementById('roomCodeDisplay').innerText = roomId;
+    
+    const prevReadyBtn = document.getElementById('readyBtn');
+    if (prevReadyBtn) {
+      prevReadyBtn.remove();
+    }
+
+    const readyBtn = document.createElement('button');
+    readyBtn.id = 'readyBtn';
+    readyBtn.innerText = 'Готов';
+    readyBtn.style.margin = '10px';
+    document.getElementById('lobby-controls').appendChild(readyBtn);
+
+    let isReady = false;
+    readyBtn.onclick = () => {
+        if (gameActive) return;
+        socket.emit('toggleReady', { roomId: currentRoomId });
+        // Визуальное переключение кнопки (будет обновлено по ответу с сервера, но можно локально)
+        isReady = !isReady;
+        readyBtn.innerText = isReady ? 'Не готов' : 'Готов';
+        readyBtn.style.background = isReady ? '#4caf50' : '#ff6b6b';
+        // При нажатии на "Готов" разблокируем звук (silentAudio)
+        if (isReady) {
+          const audio = document.getElementById('gameAudio');
+          if (audio){
+            audio.volume = 0;
+            audio.play();
+            setTimeout( () => {audio.pause(); audio.volume = 1;}, 100);
+          }
+        }
+    };
+
     showScreen('lobby');
-    document.getElementById('startGameBtn').style.display = 'block'; // хост может стартовать
     document.getElementById('lobbySongInfo').innerHTML = 'Песня выбрана. Ожидание игроков...';
 });
 
@@ -443,12 +473,52 @@ document.getElementById('confirmJoinBtn').onclick = () => {
 };
 
 socket.on('roomJoined', ({ roomId, song }) => {
-    currentRoomId = roomId;
-    currentSong = song;
-    document.getElementById('roomCodeDisplay').innerText = roomId;
-    document.getElementById('lobbySongInfo').innerHTML = `Песня: ${song.artist} - ${song.title}`;
-    document.getElementById('startGameBtn').style.display = 'none';
-    showScreen('lobby');
+  currentRoomId = roomId;
+  currentSong = song;
+  document.getElementById('roomCodeDisplay').innerText = roomId;
+  document.getElementById('lobbySongInfo').innerHTML = `Песня: ${song.artist} - ${song.title}`;
+  
+  
+  const prevReadyBtn = document.getElementById('readyBtn');
+  if (prevReadyBtn) {
+    prevReadyBtn.remove();
+  }
+
+  const readyBtn = document.createElement('button');
+  readyBtn.id = 'readyBtn';
+  readyBtn.innerText = 'Готов';
+  readyBtn.style.margin = '10px';
+  document.getElementById('lobby-controls').appendChild(readyBtn);
+
+  let isReady = false;
+  readyBtn.onclick = () => {
+      if (gameActive) return;
+      socket.emit('toggleReady', { roomId: currentRoomId });
+      // Визуальное переключение кнопки (будет обновлено по ответу с сервера, но можно локально)
+      isReady = !isReady;
+      readyBtn.innerText = isReady ? 'Не готов' : 'Готов';
+      readyBtn.style.background = isReady ? '#4caf50' : '#ff6b6b';
+      console.log(isReady);
+      // При нажатии на "Готов" разблокируем звук (silentAudio)
+      if (isReady) {
+          const audio = document.getElementById('gameAudio');
+          if (audio){
+            audio.volume = 0;
+            audio.play();
+            setTimeout( () => {audio.pause(); audio.volume = 1;}, 100);
+          }
+      }
+  };
+  showScreen('lobby');
+});
+
+// Слушаем событие allReady
+socket.on('allReady', ({ timer }) => {
+    showToast(`Все готовы! Игра начнется через ${timer} секунды...`, 'info');
+});
+
+socket.on('readyCancelled', () => {
+    showToast('Кто-то не готов. Ожидание...', 'warning');
 });
 
 socket.on('playersUpdate', (players) => {
@@ -462,10 +532,9 @@ socket.on('playersUpdate', (players) => {
     });
 });
 
-// Старт игры (хост)
-document.getElementById('startGameBtn').onclick = () => {
-    socket.emit('startGame', { roomId: currentRoomId });
-};
+socket.on('readyStatusUpdate', (statusArray) => {
+    updatePlayersReadyStatus(statusArray);
+});
 
 let currentQuestionIndex = -1;
 let currentOptions = [];
@@ -495,10 +564,26 @@ socket.on('gameStarting', async ({ song }) => {
 });
 
 socket.on('gameLoopStart', () => {
-  if (gameAudio) {
-    gameAudio.play().catch(e => console.warn(e));
-  }
+  const audio = document.getElementById('gameAudio');
+  audio.play().catch(e => console.warn(e));
 });
+
+function updatePlayersReadyStatus(statusArray) {
+    const playerCards = document.querySelectorAll('#playersList .player-card');
+    statusArray.forEach(([socketId, isReady]) => {
+        const playerDiv = Array.from(playerCards).find(card => card.dataset.socketId === socketId);
+        if (playerDiv) {
+            let statusSpan = playerDiv.querySelector('.ready-status');
+            if (!statusSpan) {
+                statusSpan = document.createElement('div');
+                statusSpan.className = 'ready-status';
+                playerDiv.appendChild(statusSpan);
+            }
+            statusSpan.innerText = isReady ? '✅ Готов' : '⏳ Не готов';
+            statusSpan.style.color = isReady ? '#4caf50' : '#ff9800';
+        }
+    });
+}
 
 socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
   currentQuestionIndex = lineIndex;
@@ -512,6 +597,9 @@ socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
     const btn = document.createElement('button');
     btn.className = 'option-btn';
     btn.innerText = opt;
+
+    btn.addEventListener("touchstart", () => btn.classList.add("active"));
+    
     btn.onclick = async (e) => {
       if (!gameActive) return;
       if (hasAnswered) {
@@ -598,7 +686,26 @@ socket.on('playersUpdate', (players) => {
   if (lobbyPlayers && screens.lobby.classList.contains('active')) {
     lobbyPlayers.innerHTML = players.map(p => `<div class="player-card"><div class="player-name">${p.name}</div><div class="player-score">${p.score}</div></div>`).join('');
   }
+  renderPlayersInLobby(players);
 });
+
+function renderPlayersInLobby(players) {
+    const container = document.getElementById('playersList');
+    container.innerHTML = '';
+    players.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'player-card';
+        div.dataset.socketId = p.id;
+        div.innerHTML = `
+            <div class="player-name">${escapeHtml(p.name)}</div>
+            <div class="player-score">${p.score} очков</div>
+            <div class="ready-status"></div>
+        `;
+        container.appendChild(div);
+    });
+    // запросим текущий статус готовности (сервер может сам прислать после join)
+    socket.emit('getReadyStatus', { roomId: currentRoomId });
+}
 
 document.getElementById('leaveLobbyBtn')?.addEventListener('click', () => {
     if (currentRoomId) {

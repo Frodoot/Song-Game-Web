@@ -74,10 +74,12 @@ button {
     box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
-button:hover {
+@media (hover: hover) {
+  button:hover { 
     transform: scale(1.02);
     background: #ff5252;
     box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+  }
 }
 
 .backBtn {
@@ -284,11 +286,13 @@ input::placeholder {
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   transition: opacity 0.3s ease-out, transform 0.2s ease;
 }
-
-.option-btn:hover {
-  transform: translateY(-3px);
-  background: #ff6b6b;
-  border-color: #feca57;
+@media (hover: hover) {
+  .option-btn:hover { background:#ff5252; }
+}
+.option-btn.active {
+  background: #ff5252;
+  transform: scale(1.02);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.3);
 }
 
 .option-btn.fade-out {

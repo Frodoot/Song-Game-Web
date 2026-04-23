@@ -578,11 +578,13 @@ io.on('connection', (socket) => {
       gameActive: false,
       hostId: socket.id,
       roomId: roomId,
-      questionTimeouts: [],   // массив таймаутов для всех строк
-      currentLineTimeout: null, // таймаут закрытия текущего вопроса
+      questionTimeouts: [],
+      currentLineTimeout: null,
       currentLineIndex: -1,
       answeredPlayers: new Set(),
-      playersReady: new Set()
+      playersReady: new Set(),
+      readyStatus: new Map(),
+      readyTimer: null
     });
     
     socket.join(roomId);
@@ -590,6 +592,9 @@ io.on('connection', (socket) => {
     
     socket.emit('roomCreated', { roomId });
     io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
+    const room = rooms.get(roomId);
+    room.readyStatus.set(socket.id, false);
+    io.to(roomId).emit('readyStatusUpdate', Array.from(room.readyStatus.entries()));
   });
   
   socket.on('joinRoom', ({ roomId, playerName }) => {
@@ -605,31 +610,48 @@ io.on('connection', (socket) => {
     
     socket.join(roomId);
     room.players.set(socket.id, { name: playerName, score: 0 });
+    room.readyStatus.set(socket.id, false);
     
     io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
     socket.emit('roomJoined', { roomId, song: { ...room.song, audioUrl: `/songs/${room.song.audioFile}` } });
+    io.to(roomId).emit('readyStatusUpdate', Array.from(room.readyStatus.entries()));
   });
   
-  socket.on('startGame', ({ roomId }) => {
+// Обработчик переключения готовности
+socket.on('toggleReady', ({ roomId }) => {
     const room = rooms.get(roomId);
-    if (!room) return;
-    if (socket.id !== room.hostId) {
-      socket.emit('error', 'Только создатель комнаты может начать игру');
-      return;
-    }
-    if (room.gameActive) return;
-
-    room.playersReady.clear();
+    if (!room || room.gameActive) return;
+    const current = room.readyStatus.get(socket.id) || false;
+    room.readyStatus.set(socket.id, !current);
+    io.to(roomId).emit('readyStatusUpdate', Array.from(room.readyStatus.entries()));
     
-    room.gameActive = true;
-    room.currentLineIndex = -1;
-    for (let [id, player] of room.players.entries()) {
-      player.score = 0;
+    // Проверка, все ли готовы
+    const allReady = Array.from(room.readyStatus.values()).every(v => v === true);
+    if (allReady && room.players.size > 0) {
+        if (room.readyTimer) clearTimeout(room.readyTimer);
+        room.readyTimer = setTimeout(() => {
+            if (room && room.gameActive === false) {
+                // Запускаем игру
+                room.gameActive = true;
+                room.currentLineIndex = -1;
+                for (let [id, player] of room.players.entries()) {
+                    player.score = 0;
+                }
+                io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
+                io.to(roomId).emit('gameStarting', { song: { ...room.song, audioUrl: `/songs/${room.song.audioFile}` } });
+            }
+            room.readyTimer = null;
+        }, 3000);
+        io.to(roomId).emit('allReady', { timer: 3 });
+    } else {
+        if (room.readyTimer) {
+            clearTimeout(room.readyTimer);
+            room.readyTimer = null;
+            io.to(roomId).emit('readyCancelled');
+        }
     }
-    io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
-    io.to(roomId).emit('gameStarting', { song: { ...room.song, audioUrl: `/songs/${room.song.audioFile}` } });
-  });
-  
+});
+
 // Клиент сообщает, что он загрузил аудио и готов
 socket.on('clientReady', ({ roomId }) => {
   const room = rooms.get(roomId);
@@ -677,17 +699,22 @@ socket.on('pressLine', ({ roomId, selectedText }) => {
     for (let [roomId, room] of rooms.entries()) {
       if (room.players.has(socket.id)) {
         room.players.delete(socket.id);
+
+        if (room.readyStatus.has(socket.id)) room.readyStatus.delete(socket.id);
+
         if (room.players.size === 0) {
           if (room.gameInterval) clearInterval(room.gameInterval);
           if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
           rooms.delete(roomId);
         } else {
           io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
+
           if (socket.id === room.hostId && room.gameActive === false) {
             const newHost = room.players.keys().next().value;
             room.hostId = newHost;
             io.to(roomId).emit('hostChanged', { newHostId: newHost });
           }
+          
           if (room.gameActive) {
             if (room.gameInterval) clearInterval(room.gameInterval);
             if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
