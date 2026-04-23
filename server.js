@@ -11,7 +11,7 @@ const path = require('path');
 const getMP3Duration = require('mp3-duration');
 
 const cookieParser = require('cookie-parser');
-const { v4: uuidv4 } = import('uuid');
+const { randomUUID } = require('crypto');
 
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
@@ -283,7 +283,7 @@ app.post('/api/songs', upload.single('media'), async (req, res) => {
         // Сохраняем JSON
         const jsonFilename = file.filename.replace(/\.[^/.]+$/, '.json');
         const jsonPath = path.join(uploadDir, jsonFilename);
-        const ownerToken = req.cookies.songOwnerToken || uuidv4();
+        const ownerToken = req.cookies.songOwnerToken || randomUUID();
         res.cookie('songOwnerToken', ownerToken, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true });
 
         const songData = {
@@ -395,7 +395,7 @@ app.post('/api/songs/:id/copy', (req, res) => {
   const newJsonPath = path.join(uploadDir, newJsonFilename);
   
   // Новый токен владельца из cookie (или генерируем)
-  const newOwnerToken = req.cookies.songOwnerToken || uuidv4();
+  const newOwnerToken = req.cookies.songOwnerToken || randomUUID();
   res.cookie('songOwnerToken', newOwnerToken, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true });
   
   // Новое название с пометкой (копия)
