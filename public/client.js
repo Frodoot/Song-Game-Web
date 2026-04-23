@@ -220,14 +220,18 @@ function renderLinesEditor() {
         <input type="number" step="0.01" class="line-time" value="${roundTime(line.time).toFixed(2)}" data-idx="${idx}">
       </div>
       <button class="preview-line-btn" data-idx="${idx}" title="Прослушать с этого момента">▶</button>
-      <button class="remove-line-btn" data-idx="${idx}" title="Удалить строку">🗑️</button>
+      <button class="remove-line-btn" data-idx="${idx}" value ="${escapeHtml(line.text)}" title="Удалить строку">🗑️</button>
     `;
     container.appendChild(div);
   });
   
   // Обработчики удаления
   document.querySelectorAll('.remove-line-btn').forEach(btn => {
-    btn.onclick = () => removeLine(parseInt(btn.dataset.idx));
+    btn.onclick = () => {
+      if (confirm(`Удалить строчку "${btn.value}"?`)) {
+          removeLine(parseInt(btn.dataset.idx));
+        }
+    }
   });
   
   // Обработчики предпрослушивания
