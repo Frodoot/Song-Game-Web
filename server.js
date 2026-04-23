@@ -491,6 +491,7 @@ function getAudioDuration(filePath) {
 
 // Транскрипция через Whisper
 async function transcribeAudio(audioPath) {
+    throw new Error('Транскрипция на этом сервере временно недоступна');
     if (os.platform() === 'win32') {
         return transcribeWithPython(audioPath);
     } else {
