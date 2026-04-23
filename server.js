@@ -510,7 +510,7 @@ async function transcribeWithWhisperCpp(audioPath) {
     const binaryPath = '/Song-Game-Web/whisper_bin/whisper-cli';
     const modelPath = '/Song-Game-Web/whisper_bin/ggml-base.bin';
     // Формируем команду с выводом в JSON
-    const command = `${binaryPath} -m ${modelPath} -f ${audioWavPath} -l ru -oj`;
+    const command = `${binaryPath} -m ${modelPath} -f ${audioPath} -l ru -oj`;
 
     try {
         const { stdout, stderr } = await execPromise(command);
