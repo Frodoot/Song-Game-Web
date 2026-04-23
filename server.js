@@ -507,8 +507,8 @@ async function transcribeWithPython(audioPath) {
 
 // Для Linux: вызов заранее скомпилированного whisper.cpp
 async function transcribeWithWhisperCpp(audioPath) {
-    const binaryPath = '/home/fedor/Song-Game-Web/whisper_bin/whisper-cli';
-    const modelPath = '/home/fedor/Song-Game-Web/whisper_bin/ggml-base.bin';
+    const binaryPath = 'Song-Game-Web/whisper_bin/whisper-cli';
+    const modelPath = 'Song-Game-Web/whisper_bin/ggml-base.bin';
     // Формируем команду с выводом в JSON
     const command = `${binaryPath} -m ${modelPath} -f ${audioPath} -l ru -oj`;
 
