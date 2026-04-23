@@ -505,24 +505,34 @@ async function transcribeWithPython(audioPath) {
     return JSON.parse(stdout).map(seg => ({ text: seg.text, time: seg.start }));
 }
 
+// Путь к модели (абсолютный)
+const MODEL_PATH = 'Song-Game-Web/models/ggml-base.bin';
+
 // Для Linux: вызов заранее скомпилированного whisper.cpp
 async function transcribeWithWhisperCpp(audioPath) {
-    const binaryPath = 'Song-Game-Web/whisper_bin/whisper-cli';
-    const modelPath = 'Song-Game-Web/whisper_bin/ggml-base.bin';
-    // Формируем команду с выводом в JSON
-    const command = `${binaryPath} -m ${modelPath} -f ${audioPath} -l ru -oj`;
-
+    console.log(`Транскрипция через whisper-cpp: ${audioPath}`);
+    // Команда: вывод в JSON (-oj), русский язык (-l ru)
+    const command = `whisper-cpp.cli -m "${MODEL_PATH}" -f "${audioPath}" -l ru -oj`;
     try {
         const { stdout, stderr } = await execPromise(command);
-        // Парсим JSON-строку из stdout
+        if (stderr && !stderr.includes('main: processing')) {
+            console.warn('stderr от whisper-cpp:', stderr);
+        }
+        // Парсим JSON из stdout
         const result = JSON.parse(stdout);
-        
-        // Распарсите результат в нужный вам формат. Обычно это массив сегментов в поле 'segments'
-        const transcription = result.transcription || result; // Уточните структуру результата
-        return transcription;
-    } catch (error) {
-        console.error('Ошибка транскрипции:', error);
-        throw error;
+        if (!result.segments || !result.segments.length) {
+            throw new Error('Нет сегментов в результате');
+        }
+        // Приводим к нашему формату { text, time }
+        const lines = result.segments.map(seg => ({
+            text: seg.text.trim(),
+            time: seg.start   // время начала в секундах
+        }));
+        console.log(`Распознано ${lines.length} строк`);
+        return lines;
+    } catch (err) {
+        console.error('Ошибка при вызове whisper-cpp:', err);
+        throw new Error(`Whisper-cpp failed: ${err.message}`);
     }
 }
 
