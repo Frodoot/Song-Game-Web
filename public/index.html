@@ -44,6 +44,7 @@
         <!-- Добавление песни -->
         <div id="addSongScreen" class="screen">
             <h2>Добавить новую песню</h2>
+            <button id="howToAddSongBtn">❓ Как добавить песню?</button>
             <input type="text" id="songTitle" placeholder="Название песни">
             <input type="text" id="songArtist" placeholder="Исполнитель">
             <input type="file" id="songMediaFile" accept=".mp3,.m4a,.mp4,.webm,.avi,.mov,.mkv" required>
@@ -120,6 +121,27 @@
             <audio id="gameAudio" controls style="width: 100%;"></audio>
             </div>
             <button id="quitGameBtn">Выйти из игры</button>
+        </div>
+    </div>
+
+    <!-- Инструкция по добавлению песни  -->
+    <div id="instructionModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>📖 Инструкция по добавлению песни</h2>
+            <ol>
+                <p><strong>Шаг 0.</strong> Перед добавлением новой песни, рекомендуется проверить её наличие в библиотеке сервиса <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer">lrclib.net</a> (вероятно, доступ к сервису невозможен без использования VPN).</p>
+                <p class="substep"><strong>Шаг 0.1.</strong> Введите в строке поиска сервиса название песни и исполнителя.</p>
+                <p class="substep"><strong>Шаг 0.2.</strong> Если результаты поиска отсутствуют, вероятнее всего, добавление песни будет невозможно.</p>
+                <p class="substep"><strong>Шаг 0.3.</strong> При наличии результатов поиска, переходите далее.</p>
+                <p><strong>Шаг 1.</strong> Скачайте mp3-файл вашей песни.</p>
+                <p><strong>Шаг 2.</strong> Введите в поля точные название песни и исполнителя.</p>
+                <p><strong>Шаг 3.</strong> Загрузите mp3-файл вашей песни в соответствующее поле.</p>
+                <p><strong>Шаг 4.</strong> Нажмите кнопку 'Загрузить файл и распознать текст'.</p>
+                <p><strong>Шаг 5.</strong> Дождитесь окончания процесса и сообщения 'Песня добавлена!'.</p>
+                <p class="substep"><strong>Шаг 5.1.</strong> В случае сообщения об ошибке, смотрите шаг 0.</p>
+            </ol>
+            <!-- <p style="margin-top: 15px; font-style: italic;">Примечание: если вы добавляете видеофайл, текст будет распознан автоматически через Whisper (может занять больше времени).</p> -->
         </div>
     </div>
 

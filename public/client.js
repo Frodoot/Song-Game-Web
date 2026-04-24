@@ -728,5 +728,27 @@ document.getElementById('quitGameBtn')?.addEventListener('click', () => {
     }
 });
 
+// Модальное окно инструкции
+const modal = document.getElementById('instructionModal');
+const howToBtn = document.getElementById('howToAddSongBtn');
+const closeModal = document.querySelector('.close-modal');
+
+if (howToBtn) {
+    howToBtn.onclick = () => {
+        modal.style.display = 'block';
+    };
+}
+if (closeModal) {
+    closeModal.onclick = () => {
+        modal.style.display = 'none';
+    };
+}
+// Закрытие при клике вне модального окна
+window.onclick = (event) => {
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+};
+
 // Инициализация
 loadSongs();

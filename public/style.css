@@ -548,3 +548,72 @@ input::placeholder {
   border-radius: 20px;
   color: white;
 }
+
+/* Модальное окно */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    backdrop-filter: blur(5px);
+}
+.modal-content {
+    background: #2e2e42;
+    margin: 10% auto;
+    padding: 25px;
+    border-radius: 30px;
+    width: 80%;
+    max-width: 700px;
+    color: #fff;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    position: relative;
+}
+.close-modal {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #ff6b6b;
+}
+.close-modal:hover {
+    color: #feca57;
+}
+.modal-content h2 {
+    margin-top: 0;
+    color: #feca57;
+}
+.modal-content ol {
+    margin-left: 20px;
+    line-height: 1.6;
+}
+.modal-content a {
+    color: #ff6b6b;
+    text-decoration: none;
+}
+.modal-content a:hover {
+    text-decoration: underline;
+}
+.modal-content p {
+    margin: 8px 0;
+    line-height: 1.5;
+}
+.modal-content .substep {
+    margin-left: 24px;
+}
+
+@media (max-width: 700px) {
+    .modal-content {
+        width: 90%;
+        margin: 20% auto;
+        padding: 15px;
+    }
+    .modal-content ol {
+        font-size: 0.9rem;
+    }
+}
