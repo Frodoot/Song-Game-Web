@@ -51,9 +51,9 @@ async function loadSongs() {
     } else {
       card.innerHTML = `
         <strong>${escapeHtml(song.title)}</strong><br>${escapeHtml(song.artist)}<br>
-        <button class="copy-song-btn" data-id="${song.id}">📋 Копировать и редактировать</button>
+        <!-- <button class="copy-song-btn" data-id="${song.id}">📋 Копировать и редактировать</button> -->
       `;
-      card.querySelector('.copy-song-btn').onclick = () => copySong(song.id);
+      //card.querySelector('.copy-song-btn').onclick = () => copySong(song.id);
     }
     container.appendChild(card);
   });
