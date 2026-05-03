@@ -718,6 +718,10 @@ socket.on('pressLine', ({ roomId, selectedText }) => {
           if (room.gameActive) {
             if (room.gameInterval) clearInterval(room.gameInterval);
             if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
+            if (room.questionTimeouts) {
+              room.questionTimeouts.forEach(clearTimeout);
+              room.questionTimeouts = [];
+            }
             room.gameActive = false;
             io.to(roomId).emit('gameAborted', 'Один из игроков отключился');
           }

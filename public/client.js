@@ -538,13 +538,11 @@ socket.on('readyStatusUpdate', (statusArray) => {
 
 let currentQuestionIndex = -1;
 let currentOptions = [];
-let hasAnswered = false;
 
 socket.on('gameStarting', async ({ song }) => {
   currentSong = song;
   gameActive = true;
   currentQuestionIndex = -1;
-  hasAnswered = false;
 
   showScreen('game');
 
@@ -588,7 +586,6 @@ function updatePlayersReadyStatus(statusArray) {
 socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
   currentQuestionIndex = lineIndex;
   currentOptions = options;
-  hasAnswered = false;
   document.getElementById('currentLyricDisplay').innerHTML = '🎵 Какая строка сейчас звучит? 🎵';
   
   const container = document.getElementById('optionsContainer');
@@ -602,17 +599,12 @@ socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
     
     btn.onclick = async (e) => {
       if (!gameActive) return;
-      if (hasAnswered) {
-        showToast('Вы уже ответили на этот вопрос!', 'error');
-        return;
-      }
       if (currentQuestionIndex !== lineIndex) return;
       
       // Отправляем ответ
       socket.emit('pressLine', { roomId: currentRoomId, selectedText: opt });
-      
-      // Блокируем все кнопки и добавляем анимацию затухания
-      hasAnswered = true;
+
+      // Блокируем другие кнопки
       const allBtns = document.querySelectorAll('.option-btn');
       allBtns.forEach(button => {
         button.disabled = true;
