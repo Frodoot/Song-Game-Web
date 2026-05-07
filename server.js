@@ -581,7 +581,6 @@ io.on('connection', (socket) => {
       questionTimeouts: [],
       currentLineTimeout: null,
       currentLineIndex: -1,
-      answeredPlayers: new Set(),
       playersReady: new Set(),
       readyStatus: new Map(),
       readyTimer: null
@@ -652,6 +651,8 @@ socket.on('toggleReady', ({ roomId }) => {
     }
 });
 
+let countdownTimer = null;
+
 // Клиент сообщает, что он загрузил аудио и готов
 socket.on('clientReady', ({ roomId }) => {
   const room = rooms.get(roomId);
@@ -664,7 +665,16 @@ socket.on('clientReady', ({ roomId }) => {
   const allReady = allPlayerIds.every(playerId => room.playersReady.has(playerId));
 
   if (allReady) {
-    startGameLoop(roomId);
+    let countdown = 4;
+    countdownTimer = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+            io.to(roomId).emit('countDown', { count: countdown });
+        } else {
+            clearInterval(countdownTimer);
+            startGameLoop(roomId);
+        }
+    }, 1000);
   }
 });
 
@@ -678,11 +688,6 @@ socket.on('pressLine', ({ roomId, selectedText }) => {
   const player = room.players.get(socket.id);
   if (!player) return;
   
-  if (room.answeredPlayers.has(socket.id)) {
-    socket.emit('answerResult', { correct: false, message: 'Вы уже отвечали на этот вопрос!' });
-    return;
-  }
-  
   const correctText = room.song.lines[currentIndex].text;
   if (selectedText === correctText) {
     player.score += 10;
@@ -691,55 +696,55 @@ socket.on('pressLine', ({ roomId, selectedText }) => {
   } else {
     socket.emit('answerResult', { correct: false, message: 'Неправильно!' });
   }
-  room.answeredPlayers.add(socket.id);
 });
   
-  socket.on('disconnect', () => {
-    console.log('Игрок отключился:', socket.id);
-    for (let [roomId, room] of rooms.entries()) {
-      if (room.players.has(socket.id)) {
-        room.players.delete(socket.id);
+socket.on('disconnect', () => {
+  console.log('Игрок отключился:', socket.id);
+  for (let [roomId, room] of rooms.entries()) {
+    if (room.players.has(socket.id)) {
+      room.players.delete(socket.id);
 
-        if (room.readyStatus.has(socket.id)) room.readyStatus.delete(socket.id);
+      if (room.readyStatus.has(socket.id)) room.readyStatus.delete(socket.id);
 
-        if (room.players.size === 0) {
+      if (room.players.size === 0) {
+        if (room.gameInterval) clearInterval(room.gameInterval);
+        if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
+        rooms.delete(roomId);
+      } else {
+        io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
+
+        if (socket.id === room.hostId && room.gameActive === false) {
+          const newHost = room.players.keys().next().value;
+          room.hostId = newHost;
+          io.to(roomId).emit('hostChanged', { newHostId: newHost });
+        }
+        
+        if (room.gameActive) {
           if (room.gameInterval) clearInterval(room.gameInterval);
           if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
-          rooms.delete(roomId);
-        } else {
-          io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
-
-          if (socket.id === room.hostId && room.gameActive === false) {
-            const newHost = room.players.keys().next().value;
-            room.hostId = newHost;
-            io.to(roomId).emit('hostChanged', { newHostId: newHost });
+          if (room.questionTimeouts) {
+            room.questionTimeouts.forEach(clearTimeout);
+            room.questionTimeouts = [];
           }
-          
-          if (room.gameActive) {
-            if (room.gameInterval) clearInterval(room.gameInterval);
-            if (room.nextLineTimeout) clearTimeout(room.nextLineTimeout);
-            if (room.questionTimeouts) {
-              room.questionTimeouts.forEach(clearTimeout);
-              room.questionTimeouts = [];
-            }
-            room.gameActive = false;
-            io.to(roomId).emit('gameAborted', 'Один из игроков отключился');
-          }
+          room.gameActive = false;
+          clearInterval(countdownTimer);
+          io.to(roomId).emit('gameAborted', 'Один из игроков отключился');
         }
-        break;
       }
+      break;
     }
-  });
-  
-  function getPlayersList(roomId) {
-    const room = rooms.get(roomId);
-    if (!room) return [];
-    return Array.from(room.players.entries()).map(([id, p]) => ({
-      id,
-      name: p.name,
-      score: p.score
-    }));
   }
+});
+
+function getPlayersList(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return [];
+  return Array.from(room.players.entries()).map(([id, p]) => ({
+    id,
+    name: p.name,
+    score: p.score
+  }));
+}
   
 function startGameLoop(roomId) {
   const room = rooms.get(roomId);
@@ -768,7 +773,6 @@ function startGameLoop(roomId) {
       
       // Отправляем вопрос для строки i
       room.currentLineIndex = i;
-      room.answeredPlayers.clear();
       const correctLine = lines[i];
       
       // Генерация вариантов      
@@ -793,7 +797,6 @@ function startGameLoop(roomId) {
         if (room.gameActive && room.currentLineIndex === i) {
           // Закрываем вопрос, сбрасываем индекс
           room.currentLineIndex = -1;
-          room.answeredPlayers.clear();
           // Следующий вопрос уже запланирован своим таймаутом
         }
       }, lineDurationSec * 1000);

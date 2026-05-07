@@ -498,7 +498,6 @@ socket.on('roomJoined', ({ roomId, song }) => {
       isReady = !isReady;
       readyBtn.innerText = isReady ? 'Не готов' : 'Готов';
       readyBtn.style.background = isReady ? '#4caf50' : '#ff6b6b';
-      console.log(isReady);
       // При нажатии на "Готов" разблокируем звук (silentAudio)
       if (isReady) {
           const audio = document.getElementById('gameAudio');
@@ -543,6 +542,9 @@ socket.on('gameStarting', async ({ song }) => {
   currentSong = song;
   gameActive = true;
   currentQuestionIndex = -1;
+  
+  document.getElementById('currentLyricDisplay').innerHTML = `Ожидание игроков...`;
+  document.getElementById('optionsContainer').innerHTML = '';
 
   showScreen('game');
 
@@ -557,13 +559,27 @@ socket.on('gameStarting', async ({ song }) => {
   // Аудио готово – сообщаем серверу
   socket.emit('clientReady', { roomId: currentRoomId });
 
-  document.getElementById('currentLyricDisplay').innerHTML = 'Приготовьтесь...';
-  document.getElementById('optionsContainer').innerHTML = '';
+  // Начинаем заглушенное проигрывание
+  audio.volume = 0;
+  audio.play().catch(e => console.warn(e));
+});
+
+socket.on('countDown', ({count}) => {
+  document.getElementById('currentLyricDisplay').innerHTML = `🎵 Игра начнётся через ${count}... 🎵`;
 });
 
 socket.on('gameLoopStart', () => {
   const audio = document.getElementById('gameAudio');
-  audio.play().catch(e => console.warn(e));
+  audio.volume = 1.0;
+  audio.pause();
+  audio.currentTime = 0;
+  audio.play().then(() => {
+      document.getElementById('currentLyricDisplay').innerHTML = '🎵 Слушайте и выбирайте! 🎵';
+  }).catch(err => {
+      console.error('Ошибка запуска после отсчёта:', err);
+  });
+
+  document.getElementById('optionsContainer').innerHTML = '';
 });
 
 function updatePlayersReadyStatus(statusArray) {
