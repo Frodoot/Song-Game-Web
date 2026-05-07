@@ -679,7 +679,7 @@ socket.on('clientReady', ({ roomId }) => {
 });
 
 // Обработчик ответа игрока
-socket.on('pressLine', ({ roomId, selectedText }) => {
+socket.on('pressLine', ({ roomId, selectedText, forLineIndex }) => {
   const room = rooms.get(roomId);
   if (!room || !room.gameActive) return;
   const currentIndex = room.currentLineIndex;
@@ -688,7 +688,7 @@ socket.on('pressLine', ({ roomId, selectedText }) => {
   const player = room.players.get(socket.id);
   if (!player) return;
   
-  const correctText = room.song.lines[currentIndex].text;
+  const correctText = room.song.lines[forLineIndex].text;
   if (selectedText === correctText) {
     player.score += 10;
     io.to(roomId).emit('playersUpdate', getPlayersList(roomId));

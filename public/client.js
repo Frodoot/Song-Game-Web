@@ -535,13 +535,11 @@ socket.on('readyStatusUpdate', (statusArray) => {
     updatePlayersReadyStatus(statusArray);
 });
 
-let currentQuestionIndex = -1;
 let currentOptions = [];
 
 socket.on('gameStarting', async ({ song }) => {
   currentSong = song;
   gameActive = true;
-  currentQuestionIndex = -1;
   
   document.getElementById('currentLyricDisplay').innerHTML = `Ожидание игроков...`;
   document.getElementById('optionsContainer').innerHTML = '';
@@ -600,7 +598,6 @@ function updatePlayersReadyStatus(statusArray) {
 }
 
 socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
-  currentQuestionIndex = lineIndex;
   currentOptions = options;
   document.getElementById('currentLyricDisplay').innerHTML = '🎵 Какая строка сейчас звучит? 🎵';
   
@@ -615,10 +612,9 @@ socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
     
     btn.onclick = async (e) => {
       if (!gameActive) return;
-      if (currentQuestionIndex !== lineIndex) return;
       
       // Отправляем ответ
-      socket.emit('pressLine', { roomId: currentRoomId, selectedText: opt });
+      socket.emit('pressLine', { roomId: currentRoomId, selectedText: opt, forLineIndex: lineIndex });
 
       // Блокируем другие кнопки
       const allBtns = document.querySelectorAll('.option-btn');
