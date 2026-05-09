@@ -597,6 +597,11 @@ function updatePlayersReadyStatus(statusArray) {
     });
 }
 
+socket.on('audioPush', ({ time }) => {
+  const audio = document.getElementById('gameAudio');
+  audio.currentTime = time;
+});
+
 socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
   currentOptions = options;
   document.getElementById('currentLyricDisplay').innerHTML = '🎵 Какая строка сейчас звучит? 🎵';

@@ -761,6 +761,17 @@ function startGameLoop(roomId) {
   const startTime = Date.now();
   room.questionTimeouts = [];
   
+  // Таймаут на "подпинывание" аудио для улучшения синхронизации
+  const firstLine = lines[0];
+  const firstLineDurationSec = firstLine.time;
+  const audioPushTime = firstLineDurationSec * 0.5;
+  const startTimeout = setTimeout(() => {
+    io.to(roomId).emit('audioPush', {
+        time: audioPushTime
+      });
+  }, audioPushTime * 1000);
+  room.questionTimeouts.push(startTimeout);
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const delayMs = line.time * 1000; // время строки от начала песни
