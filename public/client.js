@@ -450,9 +450,9 @@ socket.on('roomCreated', ({ roomId }) => {
         if (isReady) {
           const audio = document.getElementById('gameAudio');
           if (audio){
-            audio.volume = 0;
+            audio.muted = true;
             audio.play();
-            setTimeout( () => {audio.pause(); audio.volume = 1;}, 100);
+            setTimeout( () => {audio.pause(); audio.muted = false;}, 100);
           }
         }
     };
@@ -502,9 +502,9 @@ socket.on('roomJoined', ({ roomId, song }) => {
       if (isReady) {
           const audio = document.getElementById('gameAudio');
           if (audio){
-            audio.volume = 0;
+            audio.muted = true;
             audio.play();
-            setTimeout( () => {audio.pause(); audio.volume = 1;}, 100);
+            setTimeout( () => {audio.pause(); audio.muted = false;}, 100);
           }
       }
   };
@@ -558,7 +558,7 @@ socket.on('gameStarting', async ({ song }) => {
   socket.emit('clientReady', { roomId: currentRoomId });
 
   // Начинаем заглушенное проигрывание
-  audio.volume = 0;
+  audio.muted = true;
   audio.play().catch(e => console.warn(e));
 });
 
@@ -568,8 +568,8 @@ socket.on('countDown', ({count}) => {
 
 socket.on('gameLoopStart', () => {
   const audio = document.getElementById('gameAudio');
-  audio.volume = 1.0;
   audio.pause();
+  audio.muted = false;
   audio.currentTime = 0;
   audio.play().then(() => {
       document.getElementById('currentLyricDisplay').innerHTML = '🎵 Слушайте и выбирайте! 🎵';
