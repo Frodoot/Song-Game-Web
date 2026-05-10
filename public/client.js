@@ -566,7 +566,7 @@ socket.on('countDown', ({count}) => {
   document.getElementById('currentLyricDisplay').innerHTML = `🎵 Игра начнётся через ${count}... 🎵`;
 });
 
-socket.on('gameLoopStart', () => {
+socket.on('gameLoopStart', ({ maxOptions = 4 }) => {
   const audio = document.getElementById('gameAudio');
   audio.pause();
   audio.muted = false;
@@ -576,6 +576,12 @@ socket.on('gameLoopStart', () => {
   }).catch(err => {
       console.error('Ошибка запуска после отсчёта:', err);
   });
+
+  const container = document.getElementById('optionsContainer');
+  const buttonHeight = 80;
+  container.style.minHeight = `${maxOptions * buttonHeight}px`;
+  container.style.paddingBottom = '70px'; // место для toast
+  document.body.classList.add('has-game-active');
 
   document.getElementById('optionsContainer').innerHTML = '';
 });
@@ -614,6 +620,7 @@ socket.on('newQuestion', ({ lineIndex, correctText, options }) => {
     btn.innerText = opt;
 
     btn.addEventListener("touchstart", () => btn.classList.add("active"));
+    btn.addEventListener("touchEnd", () => btn.classList.remove("active"));
     
     btn.onclick = async (e) => {
       if (!gameActive) return;
@@ -666,10 +673,11 @@ socket.on('linePressed', ({ playerName, lineText }) => {
 });
 
 socket.on('gameEnded', ({ winner, players }) => {
-    gameActive = false;
-    alert(`Игра окончена! Победитель: ${winner}`);
-    showScreen('main');
-    currentRoomId = null;
+  document.body.classList.remove('has-game-active');
+  gameActive = false;
+  alert(`Игра окончена! Победитель: ${winner}`);
+  showScreen('main');
+  currentRoomId = null;
 });
 
 socket.on('gameAborted', (msg) => {

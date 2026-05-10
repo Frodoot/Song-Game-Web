@@ -15,6 +15,10 @@ body {
     padding: 20px;
 }
 
+body.has-game-active {
+    padding-bottom: 60px; /* дополнительное пространство для toast */
+}
+
 #app {
     width: 100%;
     max-width: 1200px;
@@ -258,11 +262,12 @@ input::placeholder {
 }
 
 .options-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin: 30px 0;
-  padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+    max-height: 60vh;
+    padding: 10px;
 }
 
 .option-btn {
@@ -602,12 +607,21 @@ input::placeholder {
 }
 
 @media (max-width: 700px) {
-    .modal-content {
-        width: 90%;
-        margin: 20% auto;
-        padding: 15px;
-    }
-    .modal-content ol {
-        font-size: 0.9rem;
-    }
+  .options-container {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      max-height: 50vh;
+  }
+  .option-btn {
+      padding: 14px;
+      font-size: auto;
+  }
+  .modal-content {
+      width: 90%;
+      margin: 20% auto;
+      padding: 15px;
+  }
+  .modal-content ol {
+      font-size: 0.9rem;
+  }
 }

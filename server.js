@@ -750,7 +750,11 @@ function startGameLoop(roomId) {
   const room = rooms.get(roomId);
   if (!room || !room.gameActive) return;
   
-  io.to(roomId).emit('gameLoopStart');
+  let maxDifficulty = 4;
+  if (room.song.difficultyChanges && room.song.difficultyChanges.length) {
+      maxDifficulty = Math.max(...room.song.difficultyChanges.map(c => c.difficulty), 4);
+  }
+  io.to(roomId).emit('gameLoopStart', { maxOptions: maxDifficulty });
 
   const lines = room.song.lines;
   if (!lines.length) {
