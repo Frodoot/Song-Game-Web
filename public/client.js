@@ -508,6 +508,7 @@ socket.on('roomJoined', ({ roomId, song }) => {
   audio.src = currentSong.audioUrl;
   const volumeRange = document.getElementById('song-volume');
   const previewSongBtn = document.getElementById('preview-song-btn');
+  previewSongBtn.innerHTML = '▶';
   previewSongBtn.onclick = () => {
     const isPlaying = !audio.paused && !audio.ended && audio.currentTime > 0;
     if (isPlaying) {
@@ -745,7 +746,7 @@ socket.on('gameEnded', ({ winner, players }) => {
     const audio = document.getElementById('gameAudio');
     audio.currentTime = getRandomLineTime();
     audio.volume = audio.volume * 0.25; // уменьашем громкость
-    audio.play;
+    audio.play();
 
     // Кнопка закрытия
     document.getElementById('closeWinnerBtn').onclick = () => {
@@ -759,6 +760,7 @@ socket.on('gameEnded', ({ winner, players }) => {
             gameScreen.classList.remove('slide-in-left');
             winnerPanel.classList.remove('slide-out-right');
             gameScreen.classList.remove('slide-in-left');
+            audio.pause();
         }, 500);
     };
     winnerPanel.style.display = 'block';
