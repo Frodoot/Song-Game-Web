@@ -423,10 +423,36 @@ document.getElementById('confirmCreateBtn').onclick = () => {
     socket.emit('createRoom', { playerName, songId });
 };
 
-socket.on('roomCreated', ({ roomId }) => {
+socket.on('roomCreated', ({ roomId, song }) => {
     currentRoomId = roomId;
-    document.getElementById('roomCodeDisplay').innerText = roomId;
-    
+    currentSong = song;
+    document.getElementById('roomCodeDisplay').innerText = roomId; 
+
+    const audio = document.getElementById('gameAudio');
+    audio.src = currentSong.audioUrl;
+    const volumeRange = document.getElementById('song-volume');
+    const previewSongBtn = document.getElementById('preview-song-btn');
+    previewSongBtn.innerHTML = '▶';
+    previewSongBtn.onclick = () => {
+      const isPlaying = !audio.paused && !audio.ended && audio.currentTime > 0;
+      if (isPlaying) {
+        audio.pause();
+        previewSongBtn.innerHTML = '▶';
+      } else {
+        audio.currentTime = getRandomLineTime();
+        audio.volume = volumeRange.value * 0.01;
+        audio.play();
+        previewSongBtn.innerHTML = '||';
+      }
+    };
+
+    const songVolumeText = document.getElementById('song-volume-text');
+    songVolumeText.innerHTML = volumeRange.value;
+    volumeRange.onchange = () => {
+      audio.volume = volumeRange.value * 0.01;
+      songVolumeText.innerHTML = volumeRange.value;
+    };
+
     const prevReadyBtn = document.getElementById('readyBtn');
     if (prevReadyBtn) {
       prevReadyBtn.remove();
@@ -435,7 +461,7 @@ socket.on('roomCreated', ({ roomId }) => {
     const readyBtn = document.createElement('button');
     readyBtn.id = 'readyBtn';
     readyBtn.innerText = 'Готов';
-    readyBtn.style.margin = '10px';
+    readyBtn.style.marginTop = '10px';
     document.getElementById('lobby-controls').appendChild(readyBtn);
 
     let isReady = false;
@@ -478,6 +504,29 @@ socket.on('roomJoined', ({ roomId, song }) => {
   document.getElementById('roomCodeDisplay').innerText = roomId;
   document.getElementById('lobbySongInfo').innerHTML = `Песня: ${song.artist} - ${song.title}`;
   
+  const audio = document.getElementById('gameAudio');
+  audio.src = currentSong.audioUrl;
+  const volumeRange = document.getElementById('song-volume');
+  const previewSongBtn = document.getElementById('preview-song-btn');
+  previewSongBtn.onclick = () => {
+    const isPlaying = !audio.paused && !audio.ended && audio.currentTime > 0;
+    if (isPlaying) {
+      audio.pause();
+      previewSongBtn.innerHTML = '▶';
+    } else {
+      audio.currentTime = getRandomLineTime();
+      audio.volume = volumeRange.value * 0.01;
+      audio.play();
+      previewSongBtn.innerHTML = '||';
+    }
+  };
+
+  const songVolumeText = document.getElementById('song-volume-text');
+  songVolumeText.innerHTML = volumeRange.value;
+  volumeRange.onchange = () => {
+    audio.volume = volumeRange.value * 0.01;
+    songVolumeText.innerHTML = volumeRange.value;
+  };
   
   const prevReadyBtn = document.getElementById('readyBtn');
   if (prevReadyBtn) {
@@ -487,7 +536,7 @@ socket.on('roomJoined', ({ roomId, song }) => {
   const readyBtn = document.createElement('button');
   readyBtn.id = 'readyBtn';
   readyBtn.innerText = 'Готов';
-  readyBtn.style.margin = '10px';
+  readyBtn.style.marginTop = '10px';
   document.getElementById('lobby-controls').appendChild(readyBtn);
 
   let isReady = false;
@@ -500,7 +549,6 @@ socket.on('roomJoined', ({ roomId, song }) => {
       readyBtn.style.background = isReady ? '#4caf50' : '#ff6b6b';
       // При нажатии на "Готов" разблокируем звук (silentAudio)
       if (isReady) {
-          const audio = document.getElementById('gameAudio');
           if (audio){
             audio.muted = true;
             audio.play();
@@ -571,6 +619,8 @@ socket.on('gameLoopStart', ({ maxOptions = 4 }) => {
   audio.pause();
   audio.muted = false;
   audio.currentTime = 0;
+  const volumeRange = document.getElementById('song-volume');
+  audio.volume = volumeRange.value * 0.01;
   audio.play().then(() => {
       document.getElementById('currentLyricDisplay').innerHTML = '🎵 Слушайте и выбирайте! 🎵';
   }).catch(err => {
@@ -656,29 +706,70 @@ function showToast(msg, type) {
   setTimeout(() => toast.remove(), 2000);
 }
 
-socket.on('linePressed', ({ playerName, lineText }) => {
-    // Визуальное оповещение
-    const notify = document.createElement('div');
-    notify.className = 'toast-notify';
-    notify.innerText = `${playerName} нажал: "${lineText.substring(0, 30)}..." +10`;
-    notify.style.position = 'fixed';
-    notify.style.bottom = '20px';
-    notify.style.right = '20px';
-    notify.style.background = '#4caf50';
-    notify.style.padding = '10px 20px';
-    notify.style.borderRadius = '30px';
-    notify.style.zIndex = '1000';
-    document.body.appendChild(notify);
-    setTimeout(() => notify.remove(), 2000);
+socket.on('gameEnded', ({ winner, players }) => {
+    gameActive = false;
+    // Создаём окно победителя, если его ещё нет
+    let winnerPanel = document.getElementById('winnerPanel');
+    if (!winnerPanel) {
+        winnerPanel = document.createElement('div');
+        winnerPanel.id = 'winnerPanel';
+        winnerPanel.className = 'winner-panel';
+        winnerPanel.style.background = '#00000000';
+        document.body.appendChild(winnerPanel);
+    }
+    // Формируем HTML
+    const playersSorted = [...players].sort((a,b) => b.score - a.score);
+    const tableRows = playersSorted.map(p => `
+        <tr class="${p.name === winner ? 'winner-row' : ''}">
+            <td>${escapeHtml(p.name)}</td>
+            <td>${p.score}</td>
+        </tr>
+    `).join('');
+    winnerPanel.innerHTML = `
+        <div class="winner-content">
+            <h2>🏆 Победитель 🏆</h2>
+            <div class="winner-name">${escapeHtml(winner)}</div>
+            <h3>Итоговая таблица</h3>
+            <table class="score-table">
+                <thead><tr><th>Игрок</th><th>Очки</th></tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+            <button id="closeWinnerBtn" class="close-winner-btn">Закрыть</button>
+        </div>
+    `;
+    // Анимация: игровое поле уезжает влево, панель выезжает справа
+    const gameScreen = document.getElementById('gameScreen');
+    gameScreen.classList.add('slide-out-left');
+    winnerPanel.classList.add('slide-in-right');
+    
+    const audio = document.getElementById('gameAudio');
+    audio.currentTime = getRandomLineTime();
+    audio.volume = audio.volume * 0.25; // уменьашем громкость
+    audio.play;
+
+    // Кнопка закрытия
+    document.getElementById('closeWinnerBtn').onclick = () => {
+        showScreen('main');
+        winnerPanel.classList.remove('slide-in-right');
+        winnerPanel.classList.add('slide-out-right');
+        gameScreen.classList.remove('slide-out-left');
+        gameScreen.classList.add('slide-in-left');
+        setTimeout(() => {
+            winnerPanel.style.display = 'none';
+            gameScreen.classList.remove('slide-in-left');
+            winnerPanel.classList.remove('slide-out-right');
+            gameScreen.classList.remove('slide-in-left');
+        }, 500);
+    };
+    winnerPanel.style.display = 'block';
 });
 
-socket.on('gameEnded', ({ winner, players }) => {
-  document.body.classList.remove('has-game-active');
-  gameActive = false;
-  alert(`Игра окончена! Победитель: ${winner}`);
-  showScreen('main');
-  currentRoomId = null;
-});
+function getRandomLineTime() {
+  const allLines = currentSong.lines;
+  const linesLength = allLines.length;
+  const lineIndex = Math.floor(Math.random() * linesLength * 0.5); // получаем только из первой половины всех строчек
+  return allLines[lineIndex].time;
+}
 
 socket.on('gameAborted', (msg) => {
     const audio = document.getElementById('gameAudio');
@@ -726,6 +817,8 @@ function renderPlayersInLobby(players) {
 
 document.getElementById('leaveLobbyBtn')?.addEventListener('click', () => {
     if (currentRoomId) {
+        const audio = document.getElementById('gameAudio');
+        audio.pause();
         socket.disconnect();
         setTimeout(() => socket.connect(), 100);
         currentRoomId = null;

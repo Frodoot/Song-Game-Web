@@ -589,7 +589,7 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     rooms.get(roomId).players.set(socket.id, { name: playerName, score: 0 });
     
-    socket.emit('roomCreated', { roomId });
+    socket.emit('roomCreated', { roomId, song: { ...song, lines: songData.lines, audioUrl: `/songs/${song.audioFile}` } });
     io.to(roomId).emit('playersUpdate', getPlayersList(roomId));
     const room = rooms.get(roomId);
     room.readyStatus.set(socket.id, false);

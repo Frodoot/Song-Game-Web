@@ -101,8 +101,19 @@
         <!-- Лобби (ожидание игроков) -->
         <div id="lobbyScreen" class="screen">
             <h2>Лобби: <span id="roomCodeDisplay"></span></h2>
-            <div id="playersList"></div>
-            <div id="lobbySongInfo"></div>
+            <div class="players">
+                <h3>Игроки:</h3>
+                <div id="playersList" class="playersList"></div>
+            </div>
+            <div class="preview-song">
+                <h3>Предпрослушать песню</h3>
+                <div class="song-volume-controls">
+                    <button class="preview-song-btn" id="preview-song-btn">▶</button>
+                    <input type="range" id="song-volume" value="25">
+                    <h3 id="song-volume-text" style="margin-bottom: 0px;">50</h3>
+                </div>
+            </div>
+            <h3 id="lobbySongInfo"></h3>
             <div class="lobby-controls" id="lobby-controls">
                 <button id="leaveLobbyBtn">Выйти</button>
             </div>
